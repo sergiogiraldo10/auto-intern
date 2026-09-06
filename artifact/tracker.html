@@ -1,0 +1,618 @@
+<title>Application Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafbfd;
+    --surface: #ffffff;
+    --surface-sunken: #f5f7fa;
+    --border: #e5e9f0;
+    --ink: #1c2333;
+    --ink-muted: #5c6478;
+    --ink-faint: #949bb0;
+    --accent: #3d8bfd;
+    --accent-ink: #ffffff;
+    --accent-soft: #e6f0ff;
+    --focus: #3d8bfd;
+
+    --stat-total: #3d8bfd;   --stat-active: #14b8a6;
+    --stat-interviews: #e84393; --stat-offers: #00b894;
+    --stat-rate: #f59e0b;
+
+    --s-applied: #2f80ed;    --s-applied-bg: #e8f1ff;
+    --s-assessment: #ef9a3d; --s-assessment-bg: #fff2e2;
+    --s-hirevue: #00b8d9;    --s-hirevue-bg: #e0f9fc;
+    --s-interview: #9b51e0;  --s-interview-bg: #f4e8fd;
+    --s-offer: #12b76a;      --s-offer-bg: #e3faed;
+    --s-rejected: #f2545b;   --s-rejected-bg: #fde9ea;
+    --s-ghosted: #6b7290;    --s-ghosted-bg: #eef0f7;
+    --s-withdrawn: #c17817;  --s-withdrawn-bg: #fbeedd;
+
+    --shadow: 0 1px 2px rgba(32, 31, 51, 0.06), 0 4px 16px rgba(32, 31, 51, 0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151f; --surface: #1b1f2e; --surface-sunken: #171a27; --border: #2b3040;
+      --ink: #f1f3fb; --ink-muted: #a8afc4; --ink-faint: #767c92;
+      --accent: #7db2ff; --accent-ink: #0c1420; --accent-soft: #1f2a45;
+
+      --stat-total: #7db2ff;   --stat-active: #4fd1c5;
+      --stat-interviews: #ff8fc1; --stat-offers: #34d399;
+      --stat-rate: #ffb956;
+
+      --s-applied: #6fa8ff;    --s-applied-bg: #1c2a4a;
+      --s-assessment: #ffb066; --s-assessment-bg: #3a2712;
+      --s-hirevue: #4dd8ea;    --s-hirevue-bg: #103238;
+      --s-interview: #cd93f2;  --s-interview-bg: #33204a;
+      --s-offer: #4ade80;      --s-offer-bg: #123722;
+      --s-rejected: #ff8a90;   --s-rejected-bg: #3a1518;
+      --s-ghosted: #a8aec4;    --s-ghosted-bg: #262538;
+      --s-withdrawn: #e0ac5c;  --s-withdrawn-bg: #3a2c14;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  body {
+    color: var(--ink); font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.page { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  header.page h1 {
+    font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance;
+    background: linear-gradient(90deg, var(--accent), var(--stat-rate));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.page .sub { color: var(--ink-muted); font-size: 13px; margin-top: 4px; }
+
+  .watcher-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--accent-soft); border: 1px solid var(--border);
+    color: var(--ink); border-radius: 10px; padding: 10px 14px;
+    font-size: 12.5px; margin-bottom: 20px;
+  }
+  .watcher-banner .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .watcher-banner b { font-weight: 600; }
+  .watcher-banner .meta { color: var(--ink-muted); margin-left: auto; white-space: nowrap; }
+
+  .leads-section { margin-bottom: 26px; }
+  .leads-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+  .leads-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .leads-head .leads-sub { color: var(--ink-muted); font-size: 12px; }
+  .leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .lead-card {
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--tier-color, var(--accent));
+    border-radius: 12px; padding: 14px 15px 14px 13px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .lead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .lead-company { font-weight: 600; font-size: 13.5px; }
+  .lead-role { color: var(--ink-muted); font-size: 12.5px; }
+  .lead-score {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700;
+    background: var(--tier-bg, var(--accent-soft)); color: var(--tier-color, var(--accent));
+    border-radius: 999px; padding: 3px 9px; flex-shrink: 0; white-space: nowrap;
+  }
+  .lead-meta { color: var(--ink-faint); font-size: 11.5px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .lead-reason { color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
+  .lead-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+  .lead-actions button { flex: 1; font-size: 12px; padding: 7px 10px; }
+  .lead-actions a.lead-link { font-size: 12px; color: var(--accent); text-decoration: none; align-self: center; padding: 0 4px; }
+  .lead-actions a.lead-link:hover { text-decoration: underline; }
+  .leads-empty {
+    color: var(--ink-muted); font-size: 12.5px; border: 1px dashed var(--border);
+    border-radius: 12px; padding: 16px; text-align: center;
+  }
+
+  .flow-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 14px; box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .flow-title { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .flow-rate { font-size: 12px; color: var(--ink-muted); }
+  .flow-rate b { font-family: "IBM Plex Mono", monospace; color: var(--stat-rate); font-size: 13px; }
+  .flow-svg { width: 100%; max-width: 480px; height: auto; display: block; }
+  .flow-empty { color: var(--ink-muted); font-size: 12.5px; text-align: center; padding: 30px 0; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar input[type="search"], .toolbar select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: inherit;
+  }
+  .toolbar input[type="search"] { min-width: 220px; }
+  .toolbar input:focus, .toolbar select:focus, button:focus-visible, textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .spacer { flex: 1; }
+
+  button.primary {
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button.primary:hover { filter: brightness(1.05); }
+  button.ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  button.ghost:hover { background: var(--surface-sunken); }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 14px; }
+  .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-muted); }
+  .form-grid input, .form-grid select, .form-grid textarea {
+    background: var(--surface-sunken); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 7px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical;
+  }
+  .form-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+  .field-wide { grid-column: span 3; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 880px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-muted); font-weight: 600; padding: 11px 14px; border-bottom: 1px solid var(--border);
+    background: var(--surface-sunken); white-space: nowrap;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--ink); }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-sunken); }
+  td.company { font-weight: 600; }
+  td.role { color: var(--ink-muted); }
+  td.days { font-family: "IBM Plex Mono", monospace; color: var(--ink-muted); font-size: 12.5px; }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  td.notes { color: var(--ink-muted); font-size: 12.5px; max-width: 220px; }
+
+  select.status-pill {
+    appearance: none; border: none; border-radius: 999px; padding: 5px 11px 5px 10px;
+    font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  select.status-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .empty-state { padding: 48px 24px; text-align: center; color: var(--ink-muted); }
+  .empty-state .big { font-size: 15px; color: var(--ink); font-weight: 600; margin-bottom: 6px; }
+  .sample-tag {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; margin-left: 7px;
+  }
+
+  @media (max-width: 900px) {
+    .flow-svg { font-size: 12px; }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .field-wide { grid-column: span 2; }
+  }
+</style>
+
+<div class="wrap" id="app">
+  <header class="page">
+    <div>
+      <h1>Application Tracker</h1>
+      <div class="sub">Every application, its current stage, and how long it's been sitting there.</div>
+    </div>
+  </header>
+
+  <div class="leads-section">
+    <div class="leads-head">
+      <h2>New matches</h2>
+      <span class="leads-sub" id="leadsSub"></span>
+    </div>
+    <div class="leads-grid" id="leadsGrid"></div>
+    <div class="leads-empty" id="leadsEmpty" hidden>No unreviewed matches right now — the daily scan will bring in new postings.</div>
+    <div class="watcher-banner" id="leadsWatcherBanner" hidden>
+      <span class="dot"></span>
+      <span id="leadsWatcherText"></span>
+      <span class="meta" id="leadsWatcherMeta"></span>
+    </div>
+  </div>
+
+  <div class="watcher-banner" id="watcherBanner" hidden>
+    <span class="dot"></span>
+    <span id="watcherText"></span>
+    <span class="meta" id="watcherMeta"></span>
+  </div>
+
+  <div class="flow-card" id="flowCard"></div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search company or role…">
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option>Applied</option>
+      <option>Assessment</option>
+      <option>HireVue</option>
+      <option>Interview</option>
+      <option>Offer</option>
+      <option>Rejected</option>
+      <option>Ghosted</option>
+      <option>Withdrawn</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="primary" id="addToggle">+ Add application</button>
+  </div>
+
+  <div class="panel" id="addPanel" hidden>
+    <h2>Log a new application</h2>
+    <div class="form-grid">
+      <label>Company<input type="text" id="f-company" placeholder="e.g. Acme Corp"></label>
+      <label>Role<input type="text" id="f-role" placeholder="e.g. Software Engineer Intern"></label>
+      <label>Date applied<input type="date" id="f-date"></label>
+      <label>Status
+        <select id="f-status">
+          <option>Applied</option><option>Assessment</option><option>HireVue</option>
+          <option>Interview</option><option>Offer</option><option>Rejected</option>
+          <option>Ghosted</option><option>Withdrawn</option>
+        </select>
+      </label>
+      <label>Source
+        <select id="f-source">
+          <option>LinkedIn</option><option>Company site</option><option>Simplify</option>
+          <option>Referral</option><option>Indeed</option><option>Other</option>
+        </select>
+      </label>
+      <label>Posting URL<input type="text" id="f-url" placeholder="https://…"></label>
+      <label class="field-wide">Notes<textarea id="f-notes" rows="2" placeholder="Recruiter name, referral, anything worth remembering…"></textarea></label>
+    </div>
+    <div class="form-actions">
+      <button class="ghost" id="cancelAdd">Cancel</button>
+      <button class="primary" id="saveAdd">Save application</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="company">Company</th>
+            <th class="sortable" data-sort="role">Role</th>
+            <th class="sortable" data-sort="dateApplied">Applied</th>
+            <th class="sortable" data-sort="days">Days</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Link</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyState" hidden>
+      <div class="big">No applications yet</div>
+      <div>Click "+ Add application" above to log your first one.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STATUS_META = {
+    Applied:    { fg: 'var(--s-applied)',    bg: 'var(--s-applied-bg)' },
+    Assessment: { fg: 'var(--s-assessment)', bg: 'var(--s-assessment-bg)' },
+    HireVue:    { fg: 'var(--s-hirevue)',    bg: 'var(--s-hirevue-bg)' },
+    Interview:  { fg: 'var(--s-interview)',  bg: 'var(--s-interview-bg)' },
+    Offer:      { fg: 'var(--s-offer)',      bg: 'var(--s-offer-bg)' },
+    Rejected:   { fg: 'var(--s-rejected)',   bg: 'var(--s-rejected-bg)' },
+    Ghosted:    { fg: 'var(--s-ghosted)',    bg: 'var(--s-ghosted-bg)' },
+    Withdrawn:  { fg: 'var(--s-withdrawn)',  bg: 'var(--s-withdrawn-bg)' },
+  };
+
+  let apps = [];
+  let leads = [];
+  let sortKey = 'dateApplied';
+  let sortDir = 'desc';
+  let db = null;
+
+  // Leads live in Supabase (written by the GitHub Actions match workflow,
+  // which needs real internet access to read job postings -- unlike
+  // applications/meta, which live in this Artifact's own db further below).
+  // This is the anon key, not a secret: RLS in scripts/schema.sql restricts
+  // it to select/update on leads (no insert/delete), see README.md.
+  const SUPABASE_URL = 'https://uzqqsaqpmeqxyniytizz.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6cXFzYXFwbWVxeHluaXl0aXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NTE3NDgsImV4cCI6MjEwNDIyNzc0OH0.bQ40U9yMHV9lDPAkU78HCs6iNUBSHH8i2h2FKAwfC2w';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function daysSince(dateStr) {
+    if (!dateStr) return 0;
+    return Math.max(0, Math.round((new Date() - new Date(dateStr + 'T00:00:00')) / 86400000));
+  }
+  function fmtDate(dateStr) {
+    if (!dateStr) return '—';
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function daysAgo(iso) {
+    if (!iso) return null;
+    return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86400000));
+  }
+
+  // A single-level flow (Applications -> current status), not a true
+  // multi-stage history: the schema only stores an application's CURRENT
+  // status, not the sequence of statuses it passed through, so a fully
+  // nested flow (e.g. First Round -> Second Round -> Offer) would mean
+  // fabricating transitions we don't actually know happened.
+  function computeFlow(list) {
+    const total = list.length;
+    const buckets = [
+      { label: 'Online Assessment', match: a => a.status === 'Assessment', color: 'var(--s-assessment)' },
+      { label: 'Screening Interview (HireVue)', match: a => a.status === 'HireVue', color: 'var(--s-hirevue)' },
+      { label: 'First Round Interview', match: a => a.status === 'Interview', color: 'var(--s-interview)' },
+      { label: 'Offer', match: a => a.status === 'Offer', color: 'var(--s-offer)' },
+      { label: 'Waiting for response', match: a => a.status === 'Applied', color: 'var(--s-applied)' },
+      { label: 'Rejected', match: a => a.status === 'Rejected', color: 'var(--s-rejected)' },
+      { label: 'Ghosted / No response', match: a => a.status === 'Ghosted', color: 'var(--s-ghosted)' },
+      { label: 'Withdrawn', match: a => a.status === 'Withdrawn', color: 'var(--s-withdrawn)' },
+    ];
+    const segments = buckets
+      .map(b => ({ label: b.label, color: b.color, count: list.filter(b.match).length }))
+      .filter(s => s.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const responded = list.filter(a => ['Assessment', 'HireVue', 'Interview', 'Offer', 'Rejected'].includes(a.status)).length;
+    const rate = total ? Math.round((responded / total) * 100) : 0;
+    return { total, segments, rate };
+  }
+
+  function renderStats() {
+    const { total, segments, rate } = computeFlow(apps);
+    const card = document.getElementById('flowCard');
+    if (!total) {
+      card.innerHTML = `
+        <div class="flow-head"><div class="flow-title">Application flow</div></div>
+        <div class="flow-empty">No applications logged yet -- this fills in once you add some.</div>
+      `;
+      return;
+    }
+
+    const W = 640, H = 260, top = 10, chartH = H - 2 * top;
+    const leftX = 100, nodeW = 14, rightX = 560;
+    const gap = 6;
+    const scaleRight = (chartH - gap * (segments.length - 1)) / total;
+
+    let cumLeft = 0, cumRight = 0;
+    const rows = segments.map((s, i) => {
+      const lY0 = top + (cumLeft / total) * chartH;
+      const lY1 = top + ((cumLeft + s.count) / total) * chartH;
+      const rY0 = top + cumRight * scaleRight + gap * i;
+      const rY1 = rY0 + s.count * scaleRight;
+      cumLeft += s.count;
+      cumRight += s.count;
+      const x0 = leftX + nodeW, x1 = rightX, midX = (x0 + x1) / 2;
+      const path = `M${x0},${lY0.toFixed(1)} C${midX},${lY0.toFixed(1)} ${midX},${rY0.toFixed(1)} ${x1},${rY0.toFixed(1)} L${x1},${rY1.toFixed(1)} C${midX},${rY1.toFixed(1)} ${midX},${lY1.toFixed(1)} ${x0},${lY1.toFixed(1)} Z`;
+      const labelY = (rY0 + rY1) / 2;
+      return `
+        <path d="${path}" fill="${s.color}" fill-opacity="0.32"></path>
+        <rect x="${rightX}" y="${rY0.toFixed(1)}" width="${nodeW}" height="${Math.max(rY1 - rY0, 1).toFixed(1)}" rx="2" fill="${s.color}"></rect>
+        <text x="${rightX + nodeW + 8}" y="${labelY.toFixed(1)}" dominant-baseline="middle" fill="var(--ink)">${escapeHtml(s.label)}</text>
+        <text x="${rightX + nodeW + 8}" y="${(labelY + 13).toFixed(1)}" dominant-baseline="middle" fill="var(--ink-faint)" font-family="IBM Plex Mono, monospace" font-size="11">${s.count}</text>
+      `;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="flow-head">
+        <div class="flow-title">Application flow</div>
+        <div class="flow-rate">Response rate <b>${rate}%</b></div>
+      </div>
+      <svg class="flow-svg" viewBox="0 0 ${W} ${H}" font-size="12">
+        <rect x="${leftX}" y="${top}" width="${nodeW}" height="${chartH}" rx="2" fill="var(--accent)"></rect>
+        <text x="${leftX - 8}" y="${top + chartH / 2}" text-anchor="end" dominant-baseline="middle" fill="var(--ink)">Applications</text>
+        <text x="${leftX - 8}" y="${top + chartH / 2 + 15}" text-anchor="end" dominant-baseline="middle" fill="var(--ink-faint)" font-family="IBM Plex Mono, monospace" font-size="11">${total}</text>
+        ${rows}
+      </svg>
+    `;
+  }
+
+  function renderWatcher(meta) {
+    const banner = document.getElementById('watcherBanner');
+    if (!meta || !meta.lastRunAt) { banner.hidden = true; return; }
+    banner.hidden = false;
+    const n = meta.newUpdatesCount || 0;
+    document.getElementById('watcherText').innerHTML = n > 0
+      ? `<b>Inbox check:</b> ${n} status update${n === 1 ? '' : 's'} found — ${escapeHtml(meta.summary || '')}`
+      : `<b>Inbox check:</b> no new updates since last check`;
+    document.getElementById('watcherMeta').textContent = 'checked ' + new Date(meta.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function loadLeads() {
+    const { data, error } = await sb.from('leads').select('*').eq('status', 'new');
+    leads = error ? [] : data;
+    renderLeads();
+  }
+
+  async function loadLeadsWatcherMeta() {
+    const { data } = await sb.from('meta').select('value').eq('key', 'leads_watcher').maybeSingle();
+    const banner = document.getElementById('leadsWatcherBanner');
+    if (!data || !data.value || !data.value.lastRunAt) { banner.hidden = true; return; }
+    const v = data.value;
+    banner.hidden = false;
+    document.getElementById('leadsWatcherText').innerHTML =
+      `<b>Scan:</b> ${v.newLeadsAdded || 0} new match${v.newLeadsAdded === 1 ? '' : 'es'} added` +
+      (v.archivedCount ? `, ${v.archivedCount} stale one${v.archivedCount === 1 ? '' : 's'} archived` : '');
+    document.getElementById('leadsWatcherMeta').textContent =
+      'checked ' + new Date(v.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function renderLeads() {
+    const grid = document.getElementById('leadsGrid');
+    const sub = document.getElementById('leadsSub');
+    const empty = document.getElementById('leadsEmpty');
+    const list = [...leads].sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+    sub.textContent = list.length ? `${list.length} unreviewed, ranked by fit to your resume` : '';
+    empty.hidden = list.length > 0;
+
+    grid.innerHTML = list.map(l => {
+      const d = daysAgo(l.date_posted);
+      const dLabel = d === null ? '' : d === 0 ? 'posted today' : `posted ${d}d ago`;
+      const locs = Array.isArray(l.locations) ? l.locations.join(', ') : '';
+      const tier = l.match_score >= 80
+        ? { color: 'var(--s-offer)', bg: 'var(--s-offer-bg)' }
+        : l.match_score >= 65
+        ? { color: 'var(--accent)', bg: 'var(--accent-soft)' }
+        : { color: 'var(--s-assessment)', bg: 'var(--s-assessment-bg)' };
+      return `
+        <div class="lead-card" style="--tier-color:${tier.color}; --tier-bg:${tier.bg}">
+          <div class="lead-top">
+            <div>
+              <div class="lead-company">${escapeHtml(l.company)}</div>
+              <div class="lead-role">${escapeHtml(l.role)}</div>
+            </div>
+            ${l.match_score != null ? `<div class="lead-score">${l.match_score}%</div>` : ''}
+          </div>
+          <div class="lead-meta">
+            ${l.category ? `<span>${escapeHtml(l.category)}</span>` : ''}
+            ${locs ? `<span>${escapeHtml(locs)}</span>` : ''}
+            ${dLabel ? `<span>${dLabel}</span>` : ''}
+          </div>
+          ${l.match_reason ? `<div class="lead-reason">${escapeHtml(l.match_reason)}</div>` : ''}
+          <div class="lead-actions">
+            <button class="ghost" data-dismiss="${l.id}">Dismiss</button>
+            <button class="primary" data-apply="${l.id}">Add to tracker</button>
+            ${l.url ? `<a class="lead-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    grid.querySelectorAll('button[data-dismiss]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.getAttribute('data-dismiss');
+        await sb.from('leads').update({ status: 'dismissed', last_updated: new Date().toISOString() }).eq('id', id);
+        await loadLeads();
+      });
+    });
+    grid.querySelectorAll('button[data-apply]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.getAttribute('data-apply');
+        const lead = leads.find(l => l.id === id);
+        if (!lead || !db) return;
+        await db.collection('applications').add({
+          company: lead.company, role: lead.role,
+          dateApplied: new Date().toISOString().slice(0, 10),
+          status: 'Applied', source: 'Auto-matched', url: lead.url || '',
+          notes: lead.match_score != null ? `Matched ${lead.match_score}% — ${lead.match_reason || ''}`.trim() : '',
+          lastUpdated: new Date().toISOString(),
+        });
+        await sb.from('leads').update({ status: 'applied', last_updated: new Date().toISOString() }).eq('id', id);
+        await loadLeads();
+      });
+    });
+  }
+
+  function renderRows() {
+    const search = document.getElementById('search').value.trim().toLowerCase();
+    const filter = document.getElementById('filterStatus').value;
+    let list = apps.filter(a => {
+      if (filter && a.status !== filter) return false;
+      if (search && !(`${a.company} ${a.role}`.toLowerCase().includes(search))) return false;
+      return true;
+    }).map(a => ({ ...a, days: daysSince(a.dateApplied) }));
+
+    list.sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (typeof av === 'string') av = av.toLowerCase();
+      if (typeof bv === 'string') bv = bv.toLowerCase();
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    const tbody = document.getElementById('rows');
+    document.getElementById('emptyState').hidden = list.length > 0;
+    tbody.innerHTML = list.map(a => {
+      const meta = STATUS_META[a.status] || STATUS_META.Applied;
+      const opts = Object.keys(STATUS_META).map(s => `<option value="${s}" ${s === a.status ? 'selected' : ''}>${s}</option>`).join('');
+      return `
+        <tr>
+          <td class="company">${escapeHtml(a.company)}${a.sample ? '<span class="sample-tag">sample</span>' : ''}</td>
+          <td class="role">${escapeHtml(a.role)}</td>
+          <td class="mono">${fmtDate(a.dateApplied)}</td>
+          <td class="days">${a.days}d</td>
+          <td>
+            <select class="status-pill" data-id="${a.id}" style="color:${meta.fg}; background-color:${meta.bg};">${opts}</select>
+          </td>
+          <td>${escapeHtml(a.source || '—')}</td>
+          <td>${a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">view</a>` : '—'}</td>
+          <td class="notes">${escapeHtml(a.notes || '')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('select.status-pill').forEach(sel => {
+      sel.addEventListener('change', async (e) => {
+        const id = e.target.getAttribute('data-id');
+        const meta = STATUS_META[e.target.value] || STATUS_META.Applied;
+        e.target.style.color = meta.fg;
+        e.target.style.backgroundColor = meta.bg;
+        if (db) await db.collection('applications').doc(id).update({ status: e.target.value, lastUpdated: new Date().toISOString() });
+      });
+    });
+  }
+
+  function renderAll() {
+    renderStats();
+    renderRows();
+  }
+
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.getAttribute('data-sort');
+      if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortKey = key; sortDir = 'desc'; }
+      renderRows();
+    });
+  });
+  document.getElementById('search').addEventListener('input', renderRows);
+  document.getElementById('filterStatus').addEventListener('change', renderRows);
+
+  const addPanel = document.getElementById('addPanel');
+  document.getElementById('addToggle').addEventListener('click', () => {
+    addPanel.hidden = !addPanel.hidden;
+    if (!addPanel.hidden) document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+  });
+  document.getElementById('cancelAdd').addEventListener('click', () => { addPanel.hidden = true; });
+  document.getElementById('saveAdd').addEventListener('click', async () => {
+    const company = document.getElementById('f-company').value.trim();
+    const role = document.getElementById('f-role').value.trim();
+    if (!company || !role) { alert('Company and role are required.'); return; }
+    const data = {
+      company, role,
+      dateApplied: document.getElementById('f-date').value || new Date().toISOString().slice(0, 10),
+      status: document.getElementById('f-status').value,
+      source: document.getElementById('f-source').value,
+      url: document.getElementById('f-url').value.trim(),
+      notes: document.getElementById('f-notes').value.trim(),
+      lastUpdated: new Date().toISOString(),
+    };
+    if (db) {
+      await db.collection('applications').add(data);
+      addPanel.hidden = true;
+      ['f-company','f-role','f-url','f-notes'].forEach(id => document.getElementById(id).value = '');
+    }
+  });
+
+  loadLeads(); // Supabase -- independent of the Artifact db capability below
+  loadLeadsWatcherMeta();
+
+  (async () => {
+    db = await window.claude?.use ? await window.claude.use('db') : null;
+    if (!db) { renderAll(); return; }
+
+    db.collection('applications').onSnapshot(snap => {
+      apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderAll();
+    }, () => { renderAll(); });
+
+    db.doc('meta/watcher').onSnapshot(snap => {
+      renderWatcher(snap.exists ? snap.data() : null);
+    }, () => {});
+  })();
+
+  renderAll();
+</script>

@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 """Minimal stdlib-only CLI for talking to the auto-intern Supabase backend
-over its REST API (PostgREST). Used by the scheduled cloud routines to
-read/write the `applications`, `leads`, and `meta` tables without needing
-the Claude Artifact database or any third-party Python package.
+over its REST API (PostgREST). Used by the GitHub Actions internship-match
+workflow to read/write the `leads` and `meta` tables. (Applications and the
+email watcher live in the Claude Artifact tracker instead -- see README.md
+for why the two pieces of this system use different backends.)
 
-Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the environment
-(the routines set these as private environment variables -- never commit
-real values to this repo). The service_role key bypasses Row Level
-Security entirely, so these calls always have full read/write access
-regardless of the anon-facing policies in scripts/schema.sql.
+Reads SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the environment (set
+as GitHub Actions repository secrets -- never commit real values to this
+repo). The service_role key bypasses Row Level Security entirely, so these
+calls always have full read/write access regardless of the anon-facing
+policies in scripts/schema.sql. Safe here specifically because this script
+is deterministic code, not an LLM agent processing untrusted content --
+there's no prompt-injection surface for the secret to be exfiltrated through.
 
 Usage:
     python supabase_client.py select <table> [--eq field=value ...] [--filter field=op.value ...] [--order field] [--desc] [--limit N]
-    python supabase_client.py insert <table> '<json object or array>'
+    python supabase_client.py insert <table> ['<json object or array>' | --file path.json]
     python supabase_client.py update <table> '<json object>' [--eq field=value ...] [--filter field=op.value ...]
-    python supabase_client.py upsert <table> '<json object or array>' --on-conflict id
+    python supabase_client.py upsert <table> ['<json object or array>' | --file path.json] --on-conflict id
     python supabase_client.py delete <table> [--eq field=value ...] [--filter field=op.value ...]
 
 --eq is sugar for an equality filter. --filter passes `field=op.value` straight
 through as a PostgREST query param for anything else, e.g.
 `--filter "date_posted=lt.2026-08-27T00:00:00Z"` for a less-than comparison.
 update/delete require at least one --eq or --filter (never touch a whole table).
+insert/upsert take the JSON body inline OR via --file (for payloads too large
+or awkward to pass as a shell argument).
 
 All commands print the response body (JSON) to stdout and exit non-zero
 with an error on stderr if the request fails.
@@ -106,10 +111,22 @@ def cmd_select(args):
     print(_request("GET", url, headers))
 
 
+def _load_body(args):
+    """json_data is a positional CLI arg; --file reads the same shape from
+    disk instead, for payloads too large/awkward to pass as a shell arg."""
+    if getattr(args, "file", None):
+        with open(args.file, encoding="utf-8") as f:
+            return json.load(f)
+    if args.json_data is None:
+        print("error: provide json_data or --file", file=sys.stderr)
+        sys.exit(1)
+    return json.loads(args.json_data)
+
+
 def cmd_insert(args):
     base, headers = _base_headers(prefer="return=representation")
     url = f"{base}/rest/v1/{args.table}"
-    print(_request("POST", url, headers, json.loads(args.json_data)))
+    print(_request("POST", url, headers, _load_body(args)))
 
 
 def cmd_upsert(args):
@@ -117,7 +134,7 @@ def cmd_upsert(args):
     base, headers = _base_headers(prefer=prefer)
     on_conflict = args.on_conflict or "id"
     url = f"{base}/rest/v1/{args.table}?on_conflict={on_conflict}"
-    print(_request("POST", url, headers, json.loads(args.json_data)))
+    print(_request("POST", url, headers, _load_body(args)))
 
 
 def cmd_update(args):
@@ -155,12 +172,14 @@ def main():
 
     p_insert = sub.add_parser("insert")
     p_insert.add_argument("table")
-    p_insert.add_argument("json_data")
+    p_insert.add_argument("json_data", nargs="?")
+    p_insert.add_argument("--file", help="read the JSON body from this file instead of json_data")
     p_insert.set_defaults(func=cmd_insert)
 
     p_upsert = sub.add_parser("upsert")
     p_upsert.add_argument("table")
-    p_upsert.add_argument("json_data")
+    p_upsert.add_argument("json_data", nargs="?")
+    p_upsert.add_argument("--file", help="read the JSON body from this file instead of json_data")
     p_upsert.add_argument("--on-conflict", default="id")
     p_upsert.set_defaults(func=cmd_upsert)
 

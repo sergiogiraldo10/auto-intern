@@ -1,0 +1,70 @@
+name: Internship Match Finder
+
+on:
+  schedule:
+    - cron: "0 11,20 * * *" # 7am and 4pm America/New_York (EDT, UTC-4)
+  workflow_dispatch: {} # allows manual "Run workflow" from the Actions tab
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Archive stale unreviewed leads (older than 10 days, still "new")
+        id: archive
+        run: |
+          cutoff=$(date -u -d "-10 days" +"%Y-%m-%dT%H:%M:%SZ")
+          result=$(python scripts/supabase_client.py update leads \
+            '{"status":"stale","last_updated":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' \
+            --eq status=new --filter "date_posted=lt.$cutoff")
+          count=$(echo "$result" | python -c "import json,sys; print(len(json.load(sys.stdin)))")
+          echo "archived_count=$count" >> "$GITHUB_OUTPUT"
+          echo "Archived $count stale lead(s)"
+
+      - name: Collect already-known lead ids
+        run: |
+          python scripts/supabase_client.py select leads \
+            | python -c "import json,sys; ids=[d['id'] for d in json.load(sys.stdin)]; json.dump(ids, open('seen_ids.json','w'))"
+          echo "Known leads: $(python -c "import json; print(len(json.load(open('seen_ids.json'))))")"
+
+      - name: Fetch new internship postings
+        id: fetch
+        run: |
+          python scripts/fetch_internships.py --since-days 3 --seen-ids-file seen_ids.json --out candidates.json
+          count=$(python -c "import json; print(len(json.load(open('candidates.json'))))")
+          echo "candidate_count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Score candidates against resume (real description text, keyword overlap)
+        id: score
+        run: |
+          python scripts/match_internships.py --candidates candidates.json --resume data/resume.md --out scored_leads.json --max-candidates 40
+          count=$(python -c "import json; print(len(json.load(open('scored_leads.json'))))")
+          echo "lead_count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Write scored leads to the tracker
+        if: steps.score.outputs.lead_count != '0'
+        run: python scripts/supabase_client.py upsert leads --file scored_leads.json --on-conflict id
+
+      - name: Write run summary to the tracker's meta table
+        run: |
+          python scripts/supabase_client.py upsert meta \
+            '{"key":"leads_watcher","value":{"lastRunAt":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","newCandidates":${{ steps.fetch.outputs.candidate_count }},"newLeadsAdded":${{ steps.score.outputs.lead_count }},"archivedCount":${{ steps.archive.outputs.archived_count }}}}' \
+            --on-conflict key
+
+      - name: Job summary
+        run: |
+          echo "### Internship Match Finder" >> "$GITHUB_STEP_SUMMARY"
+          echo "- New candidates fetched: ${{ steps.fetch.outputs.candidate_count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- New leads added to tracker: ${{ steps.score.outputs.lead_count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Stale leads archived: ${{ steps.archive.outputs.archived_count }}" >> "$GITHUB_STEP_SUMMARY"

@@ -5,121 +5,138 @@ email watcher that updates it from Gmail, a daily internship-matching
 pipeline, and a weekly digest. Human stays in the loop for every actual
 submission — nothing here auto-applies.
 
+## Two backends, on purpose
+
+This system's data is deliberately split across two different backends,
+because no single one can be reached from every place that needs to touch
+it:
+
+- **Applications** (and their status) live in a **Claude Artifact**
+  database. The tracker page itself is a published Claude Artifact:
+  **https://claude.ai/code/artifact/d312f11f-5cf0-4cfe-8467-cca3d0847646**.
+  The Email Watcher (a Claude Code routine) reads Gmail and writes status
+  changes here via the Artifact tool.
+- **Leads** (candidate internship postings, scored against the resume)
+  live in **Supabase** (Postgres + REST). The Internship Match Finder is a
+  **GitHub Actions workflow**, not a Claude routine — see below for why.
+
+Why not put everything in one place: Claude Code routine sandboxes run
+behind a restrictive network egress proxy that blocks arbitrary third-party
+hosts (confirmed by testing: Supabase, and every job-posting site tried via
+`WebFetch`, all returned `EGRESS_BLOCKED`) — so a routine can never read an
+actual job description. GitHub Actions runners have normal, unrestricted
+internet access, so they can — but there's no public API for external code
+to read or write a Claude Artifact's database, so GitHub Actions can't touch
+the tracker directly either. Each piece lives where it's actually reachable
+from; the tracker page talks to both.
+
 ## Pieces
 
-### 1. Tracker (`docs/index.html`)
-A static, password-gated page hosted via GitHub Pages:
-**https://sergiogiraldo10.github.io/auto-intern/**
+### 1. Tracker (`artifact/tracker.html`)
+A published Claude Artifact — private by default, no login/password needed.
+Reads/writes `applications` and `meta/watcher` via the Artifact `db`
+capability (`window.claude.use('db')`); reads/writes `leads` and
+`meta/leads_watcher` via a Supabase client (the anon key embedded in the
+page is not a secret — see Security below).
 
-Backed by Supabase (Postgres + a REST API), not the Claude Artifact database —
-see "Why Supabase, not a Claude Artifact" below. The password gate is a
-plain client-side check (not real security, just a soft deterrent — see
-`scripts/schema.sql` and the design notes below for the actual access model).
+- **`applications`** (Artifact db): `{ company, role, dateApplied, status,
+  source, url, notes, sample, lastUpdated }`. `status` is one of `Applied,
+  Assessment, HireVue, Interview, Offer, Rejected, Ghosted, Withdrawn`.
+  Append-only by design — no delete affordance in the UI.
+- **`leads`** (Supabase, snake_case columns): `{ id, company, role, url,
+  category, locations, date_posted, match_score, match_reason, status,
+  sample, last_updated }`. `status` is `new` (shown in "New matches"),
+  `applied`, `dismissed`, or `stale` (auto-archived after 10 days
+  unreviewed).
+- **`meta/watcher`** (Artifact db) and **`meta.leads_watcher`** (Supabase):
+  each holds the corresponding pipeline's last-run summary.
 
-Data lives in three Supabase tables (schema + RLS policies in
-`scripts/schema.sql`, run once via the Supabase SQL Editor):
+### 2. Email watcher (scheduled Claude Code routine)
+Runs daily via `claude.ai/code/routines`, using a **persistent session**:
+the first write in that session prompts for a one-time manual approval
+(open the routine's session link, click approve) — every fire after that,
+including real scheduled ones, reuses the same approval automatically.
+Reads `applications` from the Artifact, searches Gmail per company for
+genuine status-change emails, updates matched rows, writes a summary to
+`meta/watcher`.
 
-- **`applications`** — one row per application submitted. `{ id, company,
-  role, date_applied, status, source, url, notes, sample, last_updated }`.
-  `status` is one of `Applied, Assessment, HireVue, Interview, Offer,
-  Rejected, Ghosted, Withdrawn`. Append-only by design — there is no delete
-  policy and no delete control in the UI; a mistaken row gets its status
-  corrected, not removed.
-- **`leads`** — postings the matching pipeline found and scored, not yet
-  acted on. `{ id, company, role, url, category, locations, date_posted,
-  match_score, match_reason, status, sample, last_updated }`. `status` is
-  `new` (shown in "New matches"), `applied` (clicked "Add to tracker"),
-  `dismissed` (clicked "Dismiss"), or `stale` (auto-archived once the
-  posting is more than 10 days old and still unreviewed — see the
-  Internship Match Finder routine).
-- **`meta`** — small key/value table for operational status: `watcher` (the
-  email watcher's last run) and `leads_watcher` (the matcher's last run),
-  each `{ lastRunAt, ... }`.
+**Gmail account**: must be connected as `sergiogiraldo222@gmail.com` (where
+applications actually go), switched at claude.ai's connector settings.
 
-### 2. Email watcher (scheduled cloud routine, no committed code)
-Runs daily via a Claude Code routine (`claude.ai/code/routines`) — not a
-script in this repo, since matching an email to "is this really about this
-application" is a prose judgment call, not a fixed procedure. Each run reads
-`applications` (via `scripts/supabase_client.py`), searches Gmail per company
-for genuine status-change emails (assessment invites, interview scheduling,
-HireVue invites, offers, rejections), updates matched rows, and writes a
-summary to `meta.watcher`.
+### 3. Internship matching pipeline (GitHub Actions, not a Claude routine)
+`.github/workflows/internship-match.yml`, on the same twice-daily schedule
+(7am/4pm America/New_York). Each run:
 
-**Gmail account**: the connector must be signed in as
-`sergiogiraldo222@gmail.com` (where applications actually go), not any
-school email — only one Google account can be connected at a time, swapped
-at claude.ai's connector settings.
+1. `scripts/fetch_internships.py` — pulls new postings from the public
+   [SimplifyJobs/Summer2027-Internships](https://github.com/SimplifyJobs/Summer2027-Internships)
+   feed (unchanged from before).
+2. `scripts/match_internships.py` — for each new candidate, fetches the
+   **actual posting page** (real HTTP request, `requests` + `BeautifulSoup`)
+   and scores it against `data/resume.md` by **literal keyword/phrase
+   overlap**, not an LLM's semantic judgment. This is deliberate: real ATS
+   platforms (Workday, Greenhouse, iCIMS, etc.) are keyword/exact-phrase
+   parsers, not semantic AI, so a score meant to predict "would this
+   posting's system flag my resume" should mirror that mechanism. It also
+   means zero API cost — no model call in this pipeline at all. If a
+   posting's page can't be fetched or returns too little content to be
+   real (common on JS-rendered platforms like Workday), that candidate is
+   **skipped entirely** rather than scored from title/category guesswork —
+   a missing score is more honest than a fabricated one.
+3. `scripts/supabase_client.py` — writes results to `leads`, archives
+   `leads` still `new` after 10 days, updates `meta.leads_watcher`.
 
-### 3. Internship matching pipeline
-- `scripts/fetch_internships.py` — the deterministic, versioned part. Pulls
-  the public [SimplifyJobs/Summer2027-Internships](https://github.com/SimplifyJobs/Summer2027-Internships)
-  listings feed (community-maintained, updated many times a day), filters to
-  active postings matching `TARGET_TERMS` / `TARGET_CATEGORIES` in the
-  script, excludes postings that require only a graduate degree, and can
-  skip ids already seen. Pure stdlib, no dependencies.
+Required GitHub repository secrets (Settings → Secrets and variables →
+Actions): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The workflow can also
+be run manually from the Actions tab (`workflow_dispatch`).
 
-  ```
-  python scripts/fetch_internships.py --since-days 2
-  ```
-
-- The fuzzy part — reading each candidate's actual job description and
-  judging fit against `data/resume.md` — is left to the daily routine
-  ("Internship Match Finder"), which also archives any `leads` row still
-  `status: new` after 10 days so "New matches" always reflects genuinely
-  recent postings, not an ever-growing backlog.
-
-### 4. Weekly digest (scheduled cloud routine, read-only)
-Runs Monday mornings, reads `applications` and `leads`, and sends one push
-notification summarizing the week — applications submitted, status changes,
-interviews in progress, new matches surfaced. Sends even on a quiet week
-(zero everything), as a live-check that the automation is still running.
+### 4. Weekly digest (scheduled Claude Code routine, read-only)
+Runs Monday mornings, reads `applications` from the Artifact, sends one
+push notification summarizing the week. Sends even on a quiet week, as a
+liveness check.
 
 ### 5. Resume (`data/resume.md`)
-Plain-text mirror of Sergio's resume, used as the fit-scoring reference. Not
-tailored per posting — one resume, used everywhere. Keep it up to date by
-hand when the actual resume changes.
+Plain-text mirror of Sergio's resume — the fit-scoring reference for
+`match_internships.py`'s keyword extraction (its Skills section is parsed
+directly; see `SUPPLEMENTAL_KEYWORDS` in that script for domain terms drawn
+from the experience/project bullets, maintained by hand). Not tailored per
+posting — one resume, used everywhere.
 
 ## `scripts/supabase_client.py`
-A stdlib-only CLI the routines (and you, locally) use to read/write Supabase
-without any third-party package: `select`, `insert`, `update`, `upsert`,
-`delete`, each taking `--eq field=value` and/or `--filter field=op.value`
-(e.g. `--filter "date_posted=lt.2026-08-27T00:00:00Z"` for date-range bulk
-updates). Falls back to a built-in anon key if `SUPABASE_URL`/
-`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` aren't set in the
-environment — see the section below for why that's fine.
+A stdlib-only CLI for the `leads`/`meta` Supabase tables: `select`,
+`insert`, `update`, `upsert`, `delete`, each taking `--eq field=value`
+and/or `--filter field=op.value` (e.g. `--filter
+"date_posted=lt.2026-08-27T00:00:00Z"`); `insert`/`upsert` also take
+`--file path.json` for payloads too large for a shell argument. Falls back
+to a built-in anon key if `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` aren't
+set in the environment (useful for local testing) — GitHub Actions sets the
+real service_role key as a secret.
 
-## Why Supabase, not a Claude Artifact (and why anon, not service_role)
+## Security notes
 
-The tracker started as a Claude Artifact (a hosted page + database, no extra
-service needed). It moved to GitHub Pages + Supabase so the whole system —
-frontend and data schema both — lives as ordinary files in this repo, not
-tied to Claude's hosting.
-
-Two things worth understanding about the resulting security model:
-
-- **The anon key is not a secret.** It's embedded directly in
-  `docs/index.html`, a public file in a public repo — anyone can read it.
-  The RLS policies in `scripts/schema.sql` are what actually govern access
-  (anon can read/write `applications`/`leads`, but never delete
-  `applications`; anon can read/write `meta`, which only ever holds
-  trivial status text). This is why the routines use the anon key too,
-  rather than the far more powerful `service_role` key: `service_role`
-  bypasses RLS entirely, and giving that to a routine that also processes
-  untrusted content (Gmail messages, fetched job-posting pages) would be a
-  real prompt-injection exfiltration risk for no actual gain, since anon
-  already has all the access these routines need.
-- **The password gate is a soft deterrent, not access control.** It's a
-  plain string compare against a base64-obfuscated constant in
-  `docs/index.html` — trivially bypassable by anyone who reads the page
-  source. It exists to stop casual/accidental visitors, not a motivated one.
+- **The Supabase anon key is not a secret.** It's embedded directly in
+  `artifact/tracker.html` and `docs/index.html` (a historical snapshot —
+  see below), both effectively public. RLS policies in
+  `scripts/schema.sql` are what actually govern access: anon can
+  read/update `leads` (no insert/delete), and read `meta` only.
+- **The GitHub Actions workflow uses the service_role key** (bypasses RLS
+  entirely) — safe here specifically because `match_internships.py` and
+  `supabase_client.py` are deterministic code, not an LLM agent processing
+  untrusted content. There's no prompt-injection surface for a malicious
+  job posting to exploit; the worst a bad page can do is fail to parse.
+  This is the opposite of the Claude-routine case, where holding a
+  powerful credential *while also* letting an LLM read untrusted content
+  (emails, web pages) would be a real exfiltration risk — which is part of
+  why the routines only ever hold Artifact/Gmail access, never Supabase
+  credentials.
 
 ## Design notes / boundaries
 
-- No auto-apply, no browser automation. Every application is submitted by a
-  human click. This is intentional — most job platforms' ToS prohibit
-  automated submission, and it's detectable (behavioral/fingerprint checks).
-  Clicking "Add to tracker" on a match only logs it — it does not submit
-  anything.
+- No auto-apply, no browser automation. Every application is submitted by
+  a human click; clicking "Add to tracker" on a match only logs it.
 - Job sourcing is scoped to legitimate open data (public ATS feeds, the
-  SimplifyJobs open-source list) rather than scraping LinkedIn/Handshake,
-  for the same reason.
+  SimplifyJobs open-source list, and directly fetching a posting's own
+  public page) rather than scraping LinkedIn/Handshake.
+- `docs/index.html` and the Supabase-backed `applications`/Artifact
+  concepts from an earlier iteration are superseded by the split described
+  above; `docs/index.html` is kept only as a historical snapshot and is not
+  the live tracker.
