@@ -42,8 +42,8 @@ alter table leads enable row level security;
 alter table meta enable row level security;
 
 -- Anon (public tracker page) policies: read/write the two data tables freely.
--- No anon policy on `meta` at all -- only the routines (service_role) touch it,
--- and service_role bypasses RLS, so it doesn't need a policy either.
+-- `meta` is read-only for anon (so the page can show "last checked" status) --
+-- only the routines (service_role, which bypasses RLS) ever write to it.
 
 create policy "anon select applications" on applications for select to anon using (true);
 create policy "anon insert applications" on applications for insert to anon with check (true);
@@ -52,3 +52,7 @@ create policy "anon delete applications" on applications for delete to anon usin
 
 create policy "anon select leads" on leads for select to anon using (true);
 create policy "anon update leads" on leads for update to anon using (true) with check (true);
+
+create policy "anon select meta" on meta for select to anon using (true);
+create policy "anon insert meta" on meta for insert to anon with check (true);
+create policy "anon update meta" on meta for update to anon using (true) with check (true);

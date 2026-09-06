@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Application Tracker</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef1ef;
+    --surface: #ffffff;
+    --surface-sunken: #f5f7f6;
+    --border: #d8dfdc;
+    --ink: #16221e;
+    --ink-muted: #57665f;
+    --ink-faint: #8a978f;
+    --accent: #1f6f5c;
+    --accent-ink: #ffffff;
+    --accent-soft: #e3f0ec;
+    --focus: #1f6f5c;
+
+    --s-applied: #3d5f9e;    --s-applied-bg: #e7ecf7;
+    --s-assessment: #a9701a; --s-assessment-bg: #f7ecd9;
+    --s-hirevue: #1f7a8c;    --s-hirevue-bg: #dcf0f3;
+    --s-interview: #74499e;  --s-interview-bg: #f0e7f7;
+    --s-offer: #2f8f56;      --s-offer-bg: #e2f3e8;
+    --s-rejected: #ac3f52;   --s-rejected-bg: #f8e6e9;
+    --s-ghosted: #6f7a75;    --s-ghosted-bg: #eaeeec;
+    --s-withdrawn: #7a6349;  --s-withdrawn-bg: #f1ebe3;
+
+    --shadow: 0 1px 2px rgba(20, 30, 26, 0.06), 0 4px 16px rgba(20, 30, 26, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101613; --surface: #182420; --surface-sunken: #131d1a; --border: #2a3733;
+      --ink: #eaf1ee; --ink-muted: #a3b3ac; --ink-faint: #6c7d75;
+      --accent: #4fbf9e; --accent-ink: #0a1512; --accent-soft: #1b332c;
+      --s-applied: #8fb0e8;    --s-applied-bg: #202c42;
+      --s-assessment: #e0ac5c; --s-assessment-bg: #3a2c14;
+      --s-hirevue: #6cc9dc;    --s-hirevue-bg: #163539;
+      --s-interview: #c4a3e8;  --s-interview-bg: #2f2440;
+      --s-offer: #7bd9a0;      --s-offer-bg: #163421;
+      --s-rejected: #e88fa0;   --s-rejected-bg: #3a1e24;
+      --s-ghosted: #b9c4bf;    --s-ghosted-bg: #2a322f;
+      --s-withdrawn: #d3b28c;  --s-withdrawn-bg: #362a1c;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); }
+  body {
+    color: var(--ink); font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+
+  /* -- password gate -- */
+  #gate {
+    position: fixed; inset: 0; background: var(--bg); display: flex;
+    align-items: center; justify-content: center; z-index: 10; padding: 20px;
+  }
+  #gate .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 28px 26px; width: 100%; max-width: 320px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  #gate h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #gate p { margin: 0; color: var(--ink-muted); font-size: 12.5px; }
+  #gate input {
+    background: var(--surface-sunken); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit;
+  }
+  #gate input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  #gate button {
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  #gate .err { color: var(--s-rejected); font-size: 12.5px; min-height: 16px; }
+
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.page { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  header.page h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  header.page .sub { color: var(--ink-muted); font-size: 13px; margin-top: 4px; }
+
+  .watcher-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--accent-soft); border: 1px solid var(--border);
+    color: var(--ink); border-radius: 10px; padding: 10px 14px;
+    font-size: 12.5px; margin-bottom: 20px;
+  }
+  .watcher-banner .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .watcher-banner b { font-weight: 600; }
+  .watcher-banner .meta { color: var(--ink-muted); margin-left: auto; white-space: nowrap; }
+
+  .leads-section { margin-bottom: 26px; }
+  .leads-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+  .leads-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .leads-head .leads-sub { color: var(--ink-muted); font-size: 12px; }
+  .leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .lead-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 15px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+  }
+  .lead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .lead-company { font-weight: 600; font-size: 13.5px; }
+  .lead-role { color: var(--ink-muted); font-size: 12.5px; }
+  .lead-score {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent); border-radius: 999px;
+    padding: 3px 9px; flex-shrink: 0; white-space: nowrap;
+  }
+  .lead-meta { color: var(--ink-faint); font-size: 11.5px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .lead-reason { color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
+  .lead-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+  .lead-actions button { flex: 1; font-size: 12px; padding: 7px 10px; }
+  .lead-actions a.lead-link { font-size: 12px; color: var(--accent); text-decoration: none; align-self: center; padding: 0 4px; }
+  .lead-actions a.lead-link:hover { text-decoration: underline; }
+  .leads-empty {
+    color: var(--ink-muted); font-size: 12.5px; border: 1px dashed var(--border);
+    border-radius: 12px; padding: 16px; text-align: center;
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .stat .num { font-family: "IBM Plex Mono", monospace; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat .label { color: var(--ink-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar input[type="search"], .toolbar select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-family: inherit;
+  }
+  .toolbar input[type="search"] { min-width: 220px; }
+  .toolbar input:focus, .toolbar select:focus, button:focus-visible, textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .spacer { flex: 1; }
+
+  button.primary {
+    background: var(--accent); color: var(--accent-ink); border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button.primary:hover { filter: brightness(1.05); }
+  button.ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  button.ghost:hover { background: var(--surface-sunken); }
+  button.icon { background: transparent; border: none; color: var(--ink-faint); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+  button.icon:hover { color: var(--s-rejected); background: var(--s-rejected-bg); }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 14px; }
+  .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-muted); }
+  .form-grid input, .form-grid select, .form-grid textarea {
+    background: var(--surface-sunken); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 7px; padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical;
+  }
+  .form-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+  .field-wide { grid-column: span 3; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 880px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-muted); font-weight: 600; padding: 11px 14px; border-bottom: 1px solid var(--border);
+    background: var(--surface-sunken); white-space: nowrap;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--ink); }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-sunken); }
+  td.company { font-weight: 600; }
+  td.role { color: var(--ink-muted); }
+  td.days { font-family: "IBM Plex Mono", monospace; color: var(--ink-muted); font-size: 12.5px; }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  td.notes { color: var(--ink-muted); font-size: 12.5px; max-width: 220px; }
+
+  select.status-pill {
+    appearance: none; border: none; border-radius: 999px; padding: 5px 11px 5px 10px;
+    font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer;
+  }
+  select.status-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .empty-state { padding: 48px 24px; text-align: center; color: var(--ink-muted); }
+  .empty-state .big { font-size: 15px; color: var(--ink); font-weight: 600; margin-bottom: 6px; }
+  .sample-tag {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; margin-left: 7px;
+  }
+
+  @media (max-width: 900px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .field-wide { grid-column: span 2; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <form class="card" id="gateForm">
+    <h1>Application Tracker</h1>
+    <p>Enter the password to continue.</p>
+    <input type="password" id="gatePassword" autocomplete="current-password" autofocus>
+    <button type="submit">Unlock</button>
+    <div class="err" id="gateErr"></div>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header class="page">
+    <div>
+      <h1>Application Tracker</h1>
+      <div class="sub">Every application, its current stage, and how long it's been sitting there.</div>
+    </div>
+  </header>
+
+  <div class="leads-section">
+    <div class="leads-head">
+      <h2>New matches</h2>
+      <span class="leads-sub" id="leadsSub"></span>
+    </div>
+    <div class="leads-grid" id="leadsGrid"></div>
+    <div class="leads-empty" id="leadsEmpty" hidden>No unreviewed matches right now — the daily scan will bring in new postings.</div>
+  </div>
+
+  <div class="watcher-banner" id="watcherBanner" hidden>
+    <span class="dot"></span>
+    <span id="watcherText"></span>
+    <span class="meta" id="watcherMeta"></span>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search company or role…">
+    <select id="filterStatus">
+      <option value="">All statuses</option>
+      <option>Applied</option>
+      <option>Assessment</option>
+      <option>HireVue</option>
+      <option>Interview</option>
+      <option>Offer</option>
+      <option>Rejected</option>
+      <option>Ghosted</option>
+      <option>Withdrawn</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="primary" id="addToggle">+ Add application</button>
+  </div>
+
+  <div class="panel" id="addPanel" hidden>
+    <h2>Log a new application</h2>
+    <div class="form-grid">
+      <label>Company<input type="text" id="f-company" placeholder="e.g. Acme Corp"></label>
+      <label>Role<input type="text" id="f-role" placeholder="e.g. Software Engineer Intern"></label>
+      <label>Date applied<input type="date" id="f-date"></label>
+      <label>Status
+        <select id="f-status">
+          <option>Applied</option><option>Assessment</option><option>HireVue</option>
+          <option>Interview</option><option>Offer</option><option>Rejected</option>
+          <option>Ghosted</option><option>Withdrawn</option>
+        </select>
+      </label>
+      <label>Source
+        <select id="f-source">
+          <option>LinkedIn</option><option>Company site</option><option>Simplify</option>
+          <option>Referral</option><option>Indeed</option><option>Other</option>
+        </select>
+      </label>
+      <label>Posting URL<input type="text" id="f-url" placeholder="https://…"></label>
+      <label class="field-wide">Notes<textarea id="f-notes" rows="2" placeholder="Recruiter name, referral, anything worth remembering…"></textarea></label>
+    </div>
+    <div class="form-actions">
+      <button class="ghost" id="cancelAdd">Cancel</button>
+      <button class="primary" id="saveAdd">Save application</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="company">Company</th>
+            <th class="sortable" data-sort="role">Role</th>
+            <th class="sortable" data-sort="date_applied">Applied</th>
+            <th class="sortable" data-sort="days">Days</th>
+            <th>Status</th>
+            <th>Source</th>
+            <th>Link</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyState" hidden>
+      <div class="big">No applications yet</div>
+      <div>Click "+ Add application" above to log your first one.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // -- password gate --------------------------------------------------
+  const GATE_HASH = 'faa9af6950a04e528a508c9a18774324d97e03f5a1ad72d0494833c9e665987c';
+  const GATE_KEY = 'auto_intern_unlocked_v1';
+
+  async function sha256Hex(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function showApp() {
+    document.getElementById('gate').hidden = true;
+    document.getElementById('app').hidden = false;
+    initApp();
+  }
+
+  (function () {
+    if (localStorage.getItem(GATE_KEY) === '1') { showApp(); return; }
+    document.getElementById('gateForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('gatePassword').value;
+      const hash = await sha256Hex(pw);
+      if (hash === GATE_HASH) {
+        localStorage.setItem(GATE_KEY, '1');
+        showApp();
+      } else {
+        document.getElementById('gateErr').textContent = 'Wrong password.';
+      }
+    });
+  })();
+
+  // -- app (only runs after unlock) ------------------------------------
+  function initApp() {
+    const SUPABASE_URL = 'https://uzqqsaqpmeqxyniytizz.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6cXFzYXFwbWVxeHluaXl0aXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NTE3NDgsImV4cCI6MjEwNDIyNzc0OH0.bQ40U9yMHV9lDPAkU78HCs6iNUBSHH8i2h2FKAwfC2w';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const STATUS_META = {
+      Applied:    { fg: 'var(--s-applied)',    bg: 'var(--s-applied-bg)' },
+      Assessment: { fg: 'var(--s-assessment)', bg: 'var(--s-assessment-bg)' },
+      HireVue:    { fg: 'var(--s-hirevue)',    bg: 'var(--s-hirevue-bg)' },
+      Interview:  { fg: 'var(--s-interview)',  bg: 'var(--s-interview-bg)' },
+      Offer:      { fg: 'var(--s-offer)',      bg: 'var(--s-offer-bg)' },
+      Rejected:   { fg: 'var(--s-rejected)',   bg: 'var(--s-rejected-bg)' },
+      Ghosted:    { fg: 'var(--s-ghosted)',    bg: 'var(--s-ghosted-bg)' },
+      Withdrawn:  { fg: 'var(--s-withdrawn)',  bg: 'var(--s-withdrawn-bg)' },
+    };
+
+    let apps = [];
+    let leads = [];
+    let sortKey = 'date_applied';
+    let sortDir = 'desc';
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function daysSince(dateStr) {
+      if (!dateStr) return 0;
+      return Math.max(0, Math.round((new Date() - new Date(dateStr + 'T00:00:00')) / 86400000));
+    }
+    function fmtDate(dateStr) {
+      if (!dateStr) return '—';
+      return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    function daysAgo(iso) {
+      if (!iso) return null;
+      return Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86400000));
+    }
+
+    async function loadApplications() {
+      const { data, error } = await sb.from('applications').select('*').order('date_applied', { ascending: false });
+      apps = error ? [] : data;
+      renderStats(); renderRows();
+    }
+    async function loadLeads() {
+      const { data, error } = await sb.from('leads').select('*').eq('status', 'new');
+      leads = error ? [] : data;
+      renderLeads();
+    }
+
+    function computeStats(list) {
+      const total = list.length;
+      const active = list.filter(a => !['Rejected','Ghosted','Withdrawn'].includes(a.status)).length;
+      const interviews = list.filter(a => a.status === 'Interview').length;
+      const offers = list.filter(a => a.status === 'Offer').length;
+      const responded = list.filter(a => ['Assessment','HireVue','Interview','Offer','Rejected'].includes(a.status)).length;
+      const rate = total ? Math.round((responded / total) * 100) : 0;
+      return [
+        { label: 'Total applications', num: total },
+        { label: 'Active', num: active },
+        { label: 'Interviews', num: interviews },
+        { label: 'Offers', num: offers },
+        { label: 'Response rate', num: rate + '%' },
+      ];
+    }
+    function renderStats() {
+      document.getElementById('stats').innerHTML = computeStats(apps).map(s => `
+        <div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>
+      `).join('');
+    }
+
+    async function loadWatcherMeta() {
+      const { data } = await sb.from('meta').select('value').eq('key', 'watcher').maybeSingle();
+      renderWatcher(data ? data.value : null);
+    }
+    function renderWatcher(meta) {
+      const banner = document.getElementById('watcherBanner');
+      if (!meta || !meta.lastRunAt) { banner.hidden = true; return; }
+      banner.hidden = false;
+      const n = meta.newUpdatesCount || 0;
+      document.getElementById('watcherText').innerHTML = n > 0
+        ? `<b>Inbox check:</b> ${n} status update${n === 1 ? '' : 's'} found — ${escapeHtml(meta.summary || '')}`
+        : `<b>Inbox check:</b> no new updates since last check`;
+      document.getElementById('watcherMeta').textContent = 'checked ' + new Date(meta.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderLeads() {
+      const grid = document.getElementById('leadsGrid');
+      const sub = document.getElementById('leadsSub');
+      const empty = document.getElementById('leadsEmpty');
+      const list = [...leads].sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+      sub.textContent = list.length ? `${list.length} unreviewed, ranked by fit to your resume` : '';
+      empty.hidden = list.length > 0;
+
+      grid.innerHTML = list.map(l => {
+        const d = daysAgo(l.date_posted);
+        const dLabel = d === null ? '' : d === 0 ? 'posted today' : `posted ${d}d ago`;
+        const locs = Array.isArray(l.locations) ? l.locations.join(', ') : '';
+        return `
+          <div class="lead-card">
+            <div class="lead-top">
+              <div>
+                <div class="lead-company">${escapeHtml(l.company)}</div>
+                <div class="lead-role">${escapeHtml(l.role)}</div>
+              </div>
+              ${l.match_score != null ? `<div class="lead-score">${l.match_score}%</div>` : ''}
+            </div>
+            <div class="lead-meta">
+              ${l.category ? `<span>${escapeHtml(l.category)}</span>` : ''}
+              ${locs ? `<span>${escapeHtml(locs)}</span>` : ''}
+              ${dLabel ? `<span>${dLabel}</span>` : ''}
+            </div>
+            ${l.match_reason ? `<div class="lead-reason">${escapeHtml(l.match_reason)}</div>` : ''}
+            <div class="lead-actions">
+              <button class="ghost" data-dismiss="${l.id}">Dismiss</button>
+              <button class="primary" data-apply="${l.id}">Add to tracker</button>
+              ${l.url ? `<a class="lead-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">open ↗</a>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      grid.querySelectorAll('button[data-dismiss]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.getAttribute('data-dismiss');
+          await sb.from('leads').update({ status: 'dismissed', last_updated: new Date().toISOString() }).eq('id', id);
+          await loadLeads();
+        });
+      });
+      grid.querySelectorAll('button[data-apply]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.getAttribute('data-apply');
+          const lead = leads.find(l => l.id === id);
+          if (!lead) return;
+          await sb.from('applications').insert({
+            company: lead.company, role: lead.role,
+            date_applied: new Date().toISOString().slice(0, 10),
+            status: 'Applied', source: 'Auto-matched', url: lead.url || '',
+            notes: lead.match_score != null ? `Matched ${lead.match_score}% — ${lead.match_reason || ''}`.trim() : '',
+            last_updated: new Date().toISOString(),
+          });
+          await sb.from('leads').update({ status: 'applied', last_updated: new Date().toISOString() }).eq('id', id);
+          await Promise.all([loadLeads(), loadApplications()]);
+        });
+      });
+    }
+
+    function renderRows() {
+      const search = document.getElementById('search').value.trim().toLowerCase();
+      const filter = document.getElementById('filterStatus').value;
+      let list = apps.filter(a => {
+        if (filter && a.status !== filter) return false;
+        if (search && !(`${a.company} ${a.role}`.toLowerCase().includes(search))) return false;
+        return true;
+      }).map(a => ({ ...a, days: daysSince(a.date_applied) }));
+
+      list.sort((a, b) => {
+        let av = a[sortKey], bv = b[sortKey];
+        if (typeof av === 'string') av = av.toLowerCase();
+        if (typeof bv === 'string') bv = bv.toLowerCase();
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const tbody = document.getElementById('rows');
+      document.getElementById('emptyState').hidden = list.length > 0;
+      tbody.innerHTML = list.map(a => {
+        const meta = STATUS_META[a.status] || STATUS_META.Applied;
+        const opts = Object.keys(STATUS_META).map(s => `<option value="${s}" ${s === a.status ? 'selected' : ''}>${s}</option>`).join('');
+        return `
+          <tr>
+            <td class="company">${escapeHtml(a.company)}${a.sample ? '<span class="sample-tag">sample</span>' : ''}</td>
+            <td class="role">${escapeHtml(a.role)}</td>
+            <td class="mono">${fmtDate(a.date_applied)}</td>
+            <td class="days">${a.days}d</td>
+            <td>
+              <select class="status-pill" data-id="${a.id}" style="color:${meta.fg}; background-color:${meta.bg};">${opts}</select>
+            </td>
+            <td>${escapeHtml(a.source || '—')}</td>
+            <td>${a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">view</a>` : '—'}</td>
+            <td class="notes">${escapeHtml(a.notes || '')}</td>
+            <td><button class="icon" data-del="${a.id}" title="Delete">✕</button></td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.querySelectorAll('select.status-pill').forEach(sel => {
+        sel.addEventListener('change', async (e) => {
+          const id = e.target.getAttribute('data-id');
+          const meta = STATUS_META[e.target.value] || STATUS_META.Applied;
+          e.target.style.color = meta.fg;
+          e.target.style.backgroundColor = meta.bg;
+          await sb.from('applications').update({ status: e.target.value, last_updated: new Date().toISOString() }).eq('id', id);
+          await loadApplications();
+        });
+      });
+      tbody.querySelectorAll('button[data-del]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.getAttribute('data-del');
+          if (!confirm('Delete this application?')) return;
+          await sb.from('applications').delete().eq('id', id);
+          await loadApplications();
+        });
+      });
+    }
+
+    document.querySelectorAll('th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-sort');
+        if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        else { sortKey = key; sortDir = 'desc'; }
+        renderRows();
+      });
+    });
+    document.getElementById('search').addEventListener('input', renderRows);
+    document.getElementById('filterStatus').addEventListener('change', renderRows);
+
+    const addPanel = document.getElementById('addPanel');
+    document.getElementById('addToggle').addEventListener('click', () => {
+      addPanel.hidden = !addPanel.hidden;
+      if (!addPanel.hidden) document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    });
+    document.getElementById('cancelAdd').addEventListener('click', () => { addPanel.hidden = true; });
+    document.getElementById('saveAdd').addEventListener('click', async () => {
+      const company = document.getElementById('f-company').value.trim();
+      const role = document.getElementById('f-role').value.trim();
+      if (!company || !role) { alert('Company and role are required.'); return; }
+      await sb.from('applications').insert({
+        company, role,
+        date_applied: document.getElementById('f-date').value || new Date().toISOString().slice(0, 10),
+        status: document.getElementById('f-status').value,
+        source: document.getElementById('f-source').value,
+        url: document.getElementById('f-url').value.trim(),
+        notes: document.getElementById('f-notes').value.trim(),
+        last_updated: new Date().toISOString(),
+      });
+      addPanel.hidden = true;
+      ['f-company','f-role','f-url','f-notes'].forEach(id => document.getElementById(id).value = '');
+      await loadApplications();
+    });
+
+    loadApplications();
+    loadLeads();
+    loadWatcherMeta();
+  }
+</script>
+</body>
+</html>
