@@ -138,24 +138,16 @@
     border-radius: 12px; padding: 16px; text-align: center;
   }
 
-  .funnel-card {
+  .flow-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 18px 20px 16px; box-shadow: var(--shadow); margin-bottom: 24px;
+    padding: 18px 20px 14px; box-shadow: var(--shadow); margin-bottom: 24px;
   }
-  .funnel-title { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; }
-  .funnel-row { display: grid; grid-template-columns: 84px 1fr 34px; align-items: center; gap: 12px; margin-bottom: 8px; }
-  .funnel-row:last-of-type { margin-bottom: 0; }
-  .funnel-stage-label { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
-  .funnel-track { background: var(--surface-sunken); border-radius: 7px; height: 26px; overflow: hidden; }
-  .funnel-fill { height: 100%; border-radius: 7px; background: var(--stage-color, var(--accent)); transition: width 0.4s ease; min-width: 3px; }
-  .funnel-count { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 700; text-align: right; color: var(--ink); }
-
-  .funnel-outcomes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
-  .outcome-chip {
-    display: flex; align-items: baseline; gap: 5px; font-size: 12px; padding: 5px 11px;
-    border-radius: 999px; background: var(--chip-bg, var(--surface-sunken)); color: var(--chip-color, var(--ink-muted));
-  }
-  .outcome-chip .n { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .flow-title { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .flow-rate { font-size: 12px; color: var(--ink-muted); }
+  .flow-rate b { font-family: "IBM Plex Mono", monospace; color: var(--stat-rate); font-size: 13px; }
+  .flow-svg { width: 100%; height: auto; display: block; }
+  .flow-empty { color: var(--ink-muted); font-size: 12.5px; text-align: center; padding: 30px 0; }
 
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .toolbar input[type="search"], .toolbar select {
@@ -222,8 +214,7 @@
   }
 
   @media (max-width: 900px) {
-    .funnel-row { grid-template-columns: 62px 1fr 28px; gap: 8px; }
-    .funnel-stage-label { font-size: 11px; }
+    .flow-svg { font-size: 12px; }
     .form-grid { grid-template-columns: 1fr 1fr; }
     .field-wide { grid-column: span 2; }
   }
@@ -264,7 +255,7 @@
     <span class="meta" id="watcherMeta"></span>
   </div>
 
-  <div class="funnel-card" id="funnelCard"></div>
+  <div class="flow-card" id="flowCard"></div>
 
   <div class="toolbar">
     <input type="search" id="search" placeholder="Search company or role…">
@@ -427,52 +418,77 @@
       renderLeads();
     }
 
-    // Funnel shows how far applications have reached, not a status history --
-    // the schema only stores current status, so a rejection's prior stage is
-    // unknown. Rejected/Ghosted/Withdrawn are shown as outcomes instead of
-    // funnel stages for that reason, rather than guessing where they exited.
-    function computeFunnel(list) {
+    // A single-level flow (Applications -> current status), not a true
+    // multi-stage history: the schema only stores an application's CURRENT
+    // status, not the sequence of statuses it passed through, so a fully
+    // nested flow (e.g. First Round -> Second Round -> Offer) would mean
+    // fabricating transitions we don't actually know happened.
+    function computeFlow(list) {
       const total = list.length;
-      const screening = list.filter(a => ['Assessment','HireVue','Interview','Offer'].includes(a.status)).length;
-      const interview = list.filter(a => ['Interview','Offer'].includes(a.status)).length;
-      const offer = list.filter(a => a.status === 'Offer').length;
-      const rejected = list.filter(a => a.status === 'Rejected').length;
-      const ghosted = list.filter(a => a.status === 'Ghosted').length;
-      const withdrawn = list.filter(a => a.status === 'Withdrawn').length;
-      const responded = list.filter(a => ['Assessment','HireVue','Interview','Offer','Rejected'].includes(a.status)).length;
+      const buckets = [
+        { label: 'Screening Interview', match: a => ['Assessment', 'HireVue'].includes(a.status), color: 'var(--s-hirevue)' },
+        { label: 'First Round Interview', match: a => a.status === 'Interview', color: 'var(--s-interview)' },
+        { label: 'Offer', match: a => a.status === 'Offer', color: 'var(--s-offer)' },
+        { label: 'Waiting for response', match: a => a.status === 'Applied', color: 'var(--s-applied)' },
+        { label: 'Rejected', match: a => a.status === 'Rejected', color: 'var(--s-rejected)' },
+        { label: 'Ghosted / No response', match: a => a.status === 'Ghosted', color: 'var(--s-ghosted)' },
+        { label: 'Withdrawn', match: a => a.status === 'Withdrawn', color: 'var(--s-withdrawn)' },
+      ];
+      const segments = buckets
+        .map(b => ({ label: b.label, color: b.color, count: list.filter(b.match).length }))
+        .filter(s => s.count > 0)
+        .sort((a, b) => b.count - a.count);
+      const responded = list.filter(a => ['Assessment', 'HireVue', 'Interview', 'Offer', 'Rejected'].includes(a.status)).length;
       const rate = total ? Math.round((responded / total) * 100) : 0;
-      return {
-        stages: [
-          { label: 'Applied', count: total, color: 'var(--stat-total)' },
-          { label: 'Screening', count: screening, color: 'var(--stat-active)' },
-          { label: 'Interview', count: interview, color: 'var(--stat-interviews)' },
-          { label: 'Offer', count: offer, color: 'var(--stat-offers)' },
-        ],
-        outcomes: [
-          { label: 'Rejected', count: rejected, color: 'var(--s-rejected)', bg: 'var(--s-rejected-bg)' },
-          { label: 'Ghosted', count: ghosted, color: 'var(--s-ghosted)', bg: 'var(--s-ghosted-bg)' },
-          { label: 'Withdrawn', count: withdrawn, color: 'var(--s-withdrawn)', bg: 'var(--s-withdrawn-bg)' },
-          { label: 'Response rate', count: rate + '%', color: 'var(--stat-rate)', bg: 'var(--accent-soft)' },
-        ],
-      };
+      return { total, segments, rate };
     }
+
     function renderStats() {
-      const { stages, outcomes } = computeFunnel(apps);
-      const base = stages[0].count || 1;
-      const rows = stages.map(s => `
-        <div class="funnel-row">
-          <div class="funnel-stage-label">${s.label}</div>
-          <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round((s.count / base) * 100)}%; --stage-color:${s.color}"></div></div>
-          <div class="funnel-count">${s.count}</div>
+      const { total, segments, rate } = computeFlow(apps);
+      const card = document.getElementById('flowCard');
+      if (!total) {
+        card.innerHTML = `
+          <div class="flow-head"><div class="flow-title">Application flow</div></div>
+          <div class="flow-empty">No applications logged yet -- this fills in once you add some.</div>
+        `;
+        return;
+      }
+
+      const W = 640, H = 320, top = 10, chartH = H - 2 * top;
+      const leftX = 100, nodeW = 14, rightX = 560;
+      const gap = 6;
+      const scaleRight = (chartH - gap * (segments.length - 1)) / total;
+
+      let cumLeft = 0, cumRight = 0;
+      const rows = segments.map((s, i) => {
+        const lY0 = top + (cumLeft / total) * chartH;
+        const lY1 = top + ((cumLeft + s.count) / total) * chartH;
+        const rY0 = top + cumRight * scaleRight + gap * i;
+        const rY1 = rY0 + s.count * scaleRight;
+        cumLeft += s.count;
+        cumRight += s.count;
+        const x0 = leftX + nodeW, x1 = rightX, midX = (x0 + x1) / 2;
+        const path = `M${x0},${lY0.toFixed(1)} C${midX},${lY0.toFixed(1)} ${midX},${rY0.toFixed(1)} ${x1},${rY0.toFixed(1)} L${x1},${rY1.toFixed(1)} C${midX},${rY1.toFixed(1)} ${midX},${lY1.toFixed(1)} ${x0},${lY1.toFixed(1)} Z`;
+        const labelY = (rY0 + rY1) / 2;
+        return `
+          <path d="${path}" fill="${s.color}" fill-opacity="0.32"></path>
+          <rect x="${rightX}" y="${rY0.toFixed(1)}" width="${nodeW}" height="${Math.max(rY1 - rY0, 1).toFixed(1)}" rx="2" fill="${s.color}"></rect>
+          <text x="${rightX + nodeW + 8}" y="${labelY.toFixed(1)}" dominant-baseline="middle" fill="var(--ink)">${escapeHtml(s.label)}</text>
+          <text x="${rightX + nodeW + 8}" y="${(labelY + 13).toFixed(1)}" dominant-baseline="middle" fill="var(--ink-faint)" font-family="IBM Plex Mono, monospace" font-size="11">${s.count}</text>
+        `;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="flow-head">
+          <div class="flow-title">Application flow</div>
+          <div class="flow-rate">Response rate <b>${rate}%</b></div>
         </div>
-      `).join('');
-      const chips = outcomes.map(o => `
-        <div class="outcome-chip" style="--chip-color:${o.color}; --chip-bg:${o.bg}">${o.label} <span class="n">${o.count}</span></div>
-      `).join('');
-      document.getElementById('funnelCard').innerHTML = `
-        <div class="funnel-title">Pipeline</div>
-        ${rows}
-        <div class="funnel-outcomes">${chips}</div>
+        <svg class="flow-svg" viewBox="0 0 ${W} ${H}" font-size="12">
+          <rect x="${leftX}" y="${top}" width="${nodeW}" height="${chartH}" rx="2" fill="var(--accent)"></rect>
+          <text x="${leftX - 8}" y="${top + chartH / 2}" text-anchor="end" dominant-baseline="middle" fill="var(--ink)">Applications</text>
+          <text x="${leftX - 8}" y="${top + chartH / 2 + 15}" text-anchor="end" dominant-baseline="middle" fill="var(--ink-faint)" font-family="IBM Plex Mono, monospace" font-size="11">${total}</text>
+          ${rows}
+        </svg>
       `;
     }
 
