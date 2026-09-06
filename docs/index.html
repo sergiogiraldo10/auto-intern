@@ -312,13 +312,11 @@
 
 <script>
   // -- password gate --------------------------------------------------
-  const GATE_HASH = 'faa9af6950a04e528a508c9a18774324d97e03f5a1ad72d0494833c9e665987c';
+  // Plain client-side check (base64 is obfuscation, not security -- this
+  // gate is a soft deterrent only, see README.md). Deliberately avoids
+  // crypto.subtle, which some browser contexts restrict or omit.
+  const GATE_PASSWORD_B64 = 'R2lyYWxkbzEyMw==';
   const GATE_KEY = 'auto_intern_unlocked_v1';
-
-  async function sha256Hex(text) {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
 
   function showApp() {
     document.getElementById('gate').hidden = true;
@@ -326,20 +324,24 @@
     initApp();
   }
 
-  (function () {
-    if (localStorage.getItem(GATE_KEY) === '1') { showApp(); return; }
-    document.getElementById('gateForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const pw = document.getElementById('gatePassword').value;
-      const hash = await sha256Hex(pw);
-      if (hash === GATE_HASH) {
-        localStorage.setItem(GATE_KEY, '1');
-        showApp();
-      } else {
-        document.getElementById('gateErr').textContent = 'Wrong password.';
-      }
-    });
-  })();
+  try {
+    if (localStorage.getItem(GATE_KEY) === '1') {
+      showApp();
+    } else {
+      document.getElementById('gateForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pw = document.getElementById('gatePassword').value;
+        if (pw === atob(GATE_PASSWORD_B64)) {
+          try { localStorage.setItem(GATE_KEY, '1'); } catch (err) { /* private mode etc -- fine, just won't persist */ }
+          showApp();
+        } else {
+          document.getElementById('gateErr').textContent = 'Wrong password.';
+        }
+      });
+    }
+  } catch (err) {
+    document.getElementById('gateErr').textContent = 'Something went wrong loading the gate: ' + err.message;
+  }
 
   // -- app (only runs after unlock) ------------------------------------
   function initApp() {
