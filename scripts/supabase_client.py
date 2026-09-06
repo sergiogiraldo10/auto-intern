@@ -11,11 +11,16 @@ Security entirely, so these calls always have full read/write access
 regardless of the anon-facing policies in scripts/schema.sql.
 
 Usage:
-    python supabase_client.py select <table> [--eq field=value ...] [--order field] [--desc] [--limit N]
+    python supabase_client.py select <table> [--eq field=value ...] [--filter field=op.value ...] [--order field] [--desc] [--limit N]
     python supabase_client.py insert <table> '<json object or array>'
-    python supabase_client.py update <table> '<json object>' --eq field=value [--eq field2=value2 ...]
+    python supabase_client.py update <table> '<json object>' [--eq field=value ...] [--filter field=op.value ...]
     python supabase_client.py upsert <table> '<json object or array>' --on-conflict id
-    python supabase_client.py delete <table> --eq field=value
+    python supabase_client.py delete <table> [--eq field=value ...] [--filter field=op.value ...]
+
+--eq is sugar for an equality filter. --filter passes `field=op.value` straight
+through as a PostgREST query param for anything else, e.g.
+`--filter "date_posted=lt.2026-08-27T00:00:00Z"` for a less-than comparison.
+update/delete require at least one --eq or --filter (never touch a whole table).
 
 All commands print the response body (JSON) to stdout and exit non-zero
 with an error on stderr if the request fails.
@@ -79,12 +84,20 @@ def _request(method, path, headers, body=None):
         sys.exit(1)
 
 
-def cmd_select(args):
-    base, headers = _base_headers()
-    params = ["select=*"]
+def _filter_params(args):
+    params = []
     for pair in args.eq or []:
         field, value = pair.split("=", 1)
         params.append(f"{field}=eq.{value}")
+    for pair in getattr(args, "filter", None) or []:
+        field, op_value = pair.split("=", 1)
+        params.append(f"{field}={op_value}")
+    return params
+
+
+def cmd_select(args):
+    base, headers = _base_headers()
+    params = ["select=*"] + _filter_params(args)
     if args.order:
         params.append(f"order={args.order}.{'desc' if args.desc else 'asc'}")
     if args.limit:
@@ -108,21 +121,21 @@ def cmd_upsert(args):
 
 
 def cmd_update(args):
-    if not args.eq:
-        print("error: update requires at least one --eq filter", file=sys.stderr)
+    params = _filter_params(args)
+    if not params:
+        print("error: update requires at least one --eq or --filter", file=sys.stderr)
         sys.exit(1)
     base, headers = _base_headers(prefer="return=representation")
-    params = [f"{f}=eq.{v}" for f, v in (pair.split("=", 1) for pair in args.eq)]
     url = f"{base}/rest/v1/{args.table}?{'&'.join(params)}"
     print(_request("PATCH", url, headers, json.loads(args.json_data)))
 
 
 def cmd_delete(args):
-    if not args.eq:
-        print("error: delete requires at least one --eq filter", file=sys.stderr)
+    params = _filter_params(args)
+    if not params:
+        print("error: delete requires at least one --eq or --filter", file=sys.stderr)
         sys.exit(1)
     base, headers = _base_headers(prefer="return=representation")
-    params = [f"{f}=eq.{v}" for f, v in (pair.split("=", 1) for pair in args.eq)]
     url = f"{base}/rest/v1/{args.table}?{'&'.join(params)}"
     print(_request("DELETE", url, headers))
 
@@ -134,6 +147,7 @@ def main():
     p_select = sub.add_parser("select")
     p_select.add_argument("table")
     p_select.add_argument("--eq", action="append", help="field=value, repeatable")
+    p_select.add_argument("--filter", action="append", help="field=op.value (e.g. date_posted=lt.2026-01-01), repeatable")
     p_select.add_argument("--order")
     p_select.add_argument("--desc", action="store_true")
     p_select.add_argument("--limit", type=int)
@@ -153,12 +167,14 @@ def main():
     p_update = sub.add_parser("update")
     p_update.add_argument("table")
     p_update.add_argument("json_data")
-    p_update.add_argument("--eq", action="append", required=True, help="field=value, repeatable")
+    p_update.add_argument("--eq", action="append", help="field=value, repeatable")
+    p_update.add_argument("--filter", action="append", help="field=op.value, repeatable")
     p_update.set_defaults(func=cmd_update)
 
     p_delete = sub.add_parser("delete")
     p_delete.add_argument("table")
-    p_delete.add_argument("--eq", action="append", required=True, help="field=value, repeatable")
+    p_delete.add_argument("--eq", action="append", help="field=value, repeatable")
+    p_delete.add_argument("--filter", action="append", help="field=op.value, repeatable")
     p_delete.set_defaults(func=cmd_delete)
 
     args = parser.parse_args()
