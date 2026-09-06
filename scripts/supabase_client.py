@@ -28,12 +28,28 @@ import urllib.request
 from urllib.error import HTTPError, URLError
 
 
+# Fallback defaults so this script works even where env vars aren't configured
+# (e.g. a scheduled cloud routine). These are NOT secrets: this is the anon key,
+# already public in docs/index.html and restricted by the RLS policies in
+# scripts/schema.sql -- see README.md for why service_role is never used here.
+_DEFAULT_URL = "https://uzqqsaqpmeqxyniytizz.supabase.co"
+_DEFAULT_ANON_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6"
+    "cXFzYXFwbWVxeHluaXl0aXp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NTE3NDgsImV4cCI6"
+    "MjEwNDIyNzc0OH0.bQ40U9yMHV9lDPAkU78HCs6iNUBSHH8i2h2FKAwfC2w"
+)
+
+
 def _base_headers(prefer=None):
-    url = os.environ.get("SUPABASE_URL")
+    url = os.environ.get("SUPABASE_URL") or _DEFAULT_URL
     # Prefer service_role (full access, used for admin/manual work) but fall back to
     # the anon key -- the routines run with anon only, since it already has the access
     # it needs (see scripts/schema.sql) and isn't a secret: it's embedded in docs/index.html.
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
+    key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_ANON_KEY")
+        or _DEFAULT_ANON_KEY
+    )
     if not url or not key:
         print("error: SUPABASE_URL and (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY) must be set", file=sys.stderr)
         sys.exit(1)
