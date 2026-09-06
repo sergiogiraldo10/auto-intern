@@ -10,42 +10,51 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #eef1ef;
+    --bg: #f7f7fc;
     --surface: #ffffff;
-    --surface-sunken: #f5f7f6;
-    --border: #d8dfdc;
-    --ink: #16221e;
-    --ink-muted: #57665f;
-    --ink-faint: #8a978f;
-    --accent: #1f6f5c;
+    --surface-sunken: #f1f1f9;
+    --border: #e2e2f1;
+    --ink: #201f33;
+    --ink-muted: #64637f;
+    --ink-faint: #9695ad;
+    --accent: #6c5ce7;
     --accent-ink: #ffffff;
-    --accent-soft: #e3f0ec;
-    --focus: #1f6f5c;
+    --accent-soft: #ece9fd;
+    --focus: #6c5ce7;
 
-    --s-applied: #3d5f9e;    --s-applied-bg: #e7ecf7;
-    --s-assessment: #a9701a; --s-assessment-bg: #f7ecd9;
-    --s-hirevue: #1f7a8c;    --s-hirevue-bg: #dcf0f3;
-    --s-interview: #74499e;  --s-interview-bg: #f0e7f7;
-    --s-offer: #2f8f56;      --s-offer-bg: #e2f3e8;
-    --s-rejected: #ac3f52;   --s-rejected-bg: #f8e6e9;
-    --s-ghosted: #6f7a75;    --s-ghosted-bg: #eaeeec;
-    --s-withdrawn: #7a6349;  --s-withdrawn-bg: #f1ebe3;
+    --stat-total: #6c5ce7;   --stat-active: #0984e3;
+    --stat-interviews: #e84393; --stat-offers: #00b894;
+    --stat-rate: #e17055;
 
-    --shadow: 0 1px 2px rgba(20, 30, 26, 0.06), 0 4px 16px rgba(20, 30, 26, 0.05);
+    --s-applied: #2f80ed;    --s-applied-bg: #e8f1ff;
+    --s-assessment: #ef9a3d; --s-assessment-bg: #fff2e2;
+    --s-hirevue: #00b8d9;    --s-hirevue-bg: #e0f9fc;
+    --s-interview: #9b51e0;  --s-interview-bg: #f4e8fd;
+    --s-offer: #12b76a;      --s-offer-bg: #e3faed;
+    --s-rejected: #f2545b;   --s-rejected-bg: #fde9ea;
+    --s-ghosted: #6b7290;    --s-ghosted-bg: #eef0f7;
+    --s-withdrawn: #c17817;  --s-withdrawn-bg: #fbeedd;
+
+    --shadow: 0 1px 2px rgba(32, 31, 51, 0.06), 0 4px 16px rgba(32, 31, 51, 0.07);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #101613; --surface: #182420; --surface-sunken: #131d1a; --border: #2a3733;
-      --ink: #eaf1ee; --ink-muted: #a3b3ac; --ink-faint: #6c7d75;
-      --accent: #4fbf9e; --accent-ink: #0a1512; --accent-soft: #1b332c;
-      --s-applied: #8fb0e8;    --s-applied-bg: #202c42;
-      --s-assessment: #e0ac5c; --s-assessment-bg: #3a2c14;
-      --s-hirevue: #6cc9dc;    --s-hirevue-bg: #163539;
-      --s-interview: #c4a3e8;  --s-interview-bg: #2f2440;
-      --s-offer: #7bd9a0;      --s-offer-bg: #163421;
-      --s-rejected: #e88fa0;   --s-rejected-bg: #3a1e24;
-      --s-ghosted: #b9c4bf;    --s-ghosted-bg: #2a322f;
-      --s-withdrawn: #d3b28c;  --s-withdrawn-bg: #362a1c;
+      --bg: #14131f; --surface: #1e1d2e; --surface-sunken: #191828; --border: #302f45;
+      --ink: #f2f1fb; --ink-muted: #b3b2c9; --ink-faint: #78778f;
+      --accent: #a08cff; --accent-ink: #14131f; --accent-soft: #2b2650;
+
+      --stat-total: #a08cff;   --stat-active: #56b6ff;
+      --stat-interviews: #ff8fc1; --stat-offers: #34d399;
+      --stat-rate: #ffab73;
+
+      --s-applied: #6fa8ff;    --s-applied-bg: #1c2a4a;
+      --s-assessment: #ffb066; --s-assessment-bg: #3a2712;
+      --s-hirevue: #4dd8ea;    --s-hirevue-bg: #103238;
+      --s-interview: #cd93f2;  --s-interview-bg: #33204a;
+      --s-offer: #4ade80;      --s-offer-bg: #123722;
+      --s-rejected: #ff8a90;   --s-rejected-bg: #3a1518;
+      --s-ghosted: #a8aec4;    --s-ghosted-bg: #262538;
+      --s-withdrawn: #e0ac5c;  --s-withdrawn-bg: #3a2c14;
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.25);
     }
   }
@@ -83,7 +92,11 @@
   .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
 
   header.page { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
-  header.page h1 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  header.page h1 {
+    font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance;
+    background: linear-gradient(90deg, var(--accent), var(--stat-interviews));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
   header.page .sub { color: var(--ink-muted); font-size: 13px; margin-top: 4px; }
 
   .watcher-banner {
@@ -102,16 +115,17 @@
   .leads-head .leads-sub { color: var(--ink-muted); font-size: 12px; }
   .leads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
   .lead-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 15px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--tier-color, var(--accent));
+    border-radius: 12px; padding: 14px 15px 14px 13px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 8px;
   }
   .lead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .lead-company { font-weight: 600; font-size: 13.5px; }
   .lead-role { color: var(--ink-muted); font-size: 12.5px; }
   .lead-score {
-    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600;
-    background: var(--accent-soft); color: var(--accent); border-radius: 999px;
-    padding: 3px 9px; flex-shrink: 0; white-space: nowrap;
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700;
+    background: var(--tier-bg, var(--accent-soft)); color: var(--tier-color, var(--accent));
+    border-radius: 999px; padding: 3px 9px; flex-shrink: 0; white-space: nowrap;
   }
   .lead-meta { color: var(--ink-faint); font-size: 11.5px; display: flex; gap: 8px; flex-wrap: wrap; }
   .lead-reason { color: var(--ink-muted); font-size: 12px; line-height: 1.45; }
@@ -125,8 +139,11 @@
   }
 
   .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
-  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
-  .stat .num { font-family: "IBM Plex Mono", monospace; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow); border-top: 3px solid var(--stat-color, var(--accent));
+  }
+  .stat .num { font-family: "IBM Plex Mono", monospace; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--stat-color, var(--ink)); }
   .stat .label { color: var(--ink-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -409,16 +426,16 @@
       const responded = list.filter(a => ['Assessment','HireVue','Interview','Offer','Rejected'].includes(a.status)).length;
       const rate = total ? Math.round((responded / total) * 100) : 0;
       return [
-        { label: 'Total applications', num: total },
-        { label: 'Active', num: active },
-        { label: 'Interviews', num: interviews },
-        { label: 'Offers', num: offers },
-        { label: 'Response rate', num: rate + '%' },
+        { label: 'Total applications', num: total, color: 'var(--stat-total)' },
+        { label: 'Active', num: active, color: 'var(--stat-active)' },
+        { label: 'Interviews', num: interviews, color: 'var(--stat-interviews)' },
+        { label: 'Offers', num: offers, color: 'var(--stat-offers)' },
+        { label: 'Response rate', num: rate + '%', color: 'var(--stat-rate)' },
       ];
     }
     function renderStats() {
       document.getElementById('stats').innerHTML = computeStats(apps).map(s => `
-        <div class="stat"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>
+        <div class="stat" style="--stat-color:${s.color}"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>
       `).join('');
     }
 
@@ -449,8 +466,13 @@
         const d = daysAgo(l.date_posted);
         const dLabel = d === null ? '' : d === 0 ? 'posted today' : `posted ${d}d ago`;
         const locs = Array.isArray(l.locations) ? l.locations.join(', ') : '';
+        const tier = l.match_score >= 80
+          ? { color: 'var(--s-offer)', bg: 'var(--s-offer-bg)' }
+          : l.match_score >= 65
+          ? { color: 'var(--accent)', bg: 'var(--accent-soft)' }
+          : { color: 'var(--s-assessment)', bg: 'var(--s-assessment-bg)' };
         return `
-          <div class="lead-card">
+          <div class="lead-card" style="--tier-color:${tier.color}; --tier-bg:${tier.bg}">
             <div class="lead-top">
               <div>
                 <div class="lead-company">${escapeHtml(l.company)}</div>
