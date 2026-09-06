@@ -138,13 +138,24 @@
     border-radius: 12px; padding: 16px; text-align: center;
   }
 
-  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
-  .stat {
+  .funnel-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px 16px; box-shadow: var(--shadow); border-top: 3px solid var(--stat-color, var(--accent));
+    padding: 18px 20px 16px; box-shadow: var(--shadow); margin-bottom: 24px;
   }
-  .stat .num { font-family: "IBM Plex Mono", monospace; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--stat-color, var(--ink)); }
-  .stat .label { color: var(--ink-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .funnel-title { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; }
+  .funnel-row { display: grid; grid-template-columns: 84px 1fr 34px; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .funnel-row:last-of-type { margin-bottom: 0; }
+  .funnel-stage-label { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .funnel-track { background: var(--surface-sunken); border-radius: 7px; height: 26px; overflow: hidden; }
+  .funnel-fill { height: 100%; border-radius: 7px; background: var(--stage-color, var(--accent)); transition: width 0.4s ease; min-width: 3px; }
+  .funnel-count { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 700; text-align: right; color: var(--ink); }
+
+  .funnel-outcomes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .outcome-chip {
+    display: flex; align-items: baseline; gap: 5px; font-size: 12px; padding: 5px 11px;
+    border-radius: 999px; background: var(--chip-bg, var(--surface-sunken)); color: var(--chip-color, var(--ink-muted));
+  }
+  .outcome-chip .n { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
 
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .toolbar input[type="search"], .toolbar select {
@@ -211,7 +222,8 @@
   }
 
   @media (max-width: 900px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
+    .funnel-row { grid-template-columns: 62px 1fr 28px; gap: 8px; }
+    .funnel-stage-label { font-size: 11px; }
     .form-grid { grid-template-columns: 1fr 1fr; }
     .field-wide { grid-column: span 2; }
   }
@@ -252,7 +264,7 @@
     <span class="meta" id="watcherMeta"></span>
   </div>
 
-  <div class="stats" id="stats"></div>
+  <div class="funnel-card" id="funnelCard"></div>
 
   <div class="toolbar">
     <input type="search" id="search" placeholder="Search company or role…">
@@ -415,25 +427,53 @@
       renderLeads();
     }
 
-    function computeStats(list) {
+    // Funnel shows how far applications have reached, not a status history --
+    // the schema only stores current status, so a rejection's prior stage is
+    // unknown. Rejected/Ghosted/Withdrawn are shown as outcomes instead of
+    // funnel stages for that reason, rather than guessing where they exited.
+    function computeFunnel(list) {
       const total = list.length;
-      const active = list.filter(a => !['Rejected','Ghosted','Withdrawn'].includes(a.status)).length;
-      const interviews = list.filter(a => a.status === 'Interview').length;
-      const offers = list.filter(a => a.status === 'Offer').length;
+      const screening = list.filter(a => ['Assessment','HireVue','Interview','Offer'].includes(a.status)).length;
+      const interview = list.filter(a => ['Interview','Offer'].includes(a.status)).length;
+      const offer = list.filter(a => a.status === 'Offer').length;
+      const rejected = list.filter(a => a.status === 'Rejected').length;
+      const ghosted = list.filter(a => a.status === 'Ghosted').length;
+      const withdrawn = list.filter(a => a.status === 'Withdrawn').length;
       const responded = list.filter(a => ['Assessment','HireVue','Interview','Offer','Rejected'].includes(a.status)).length;
       const rate = total ? Math.round((responded / total) * 100) : 0;
-      return [
-        { label: 'Total applications', num: total, color: 'var(--stat-total)' },
-        { label: 'Active', num: active, color: 'var(--stat-active)' },
-        { label: 'Interviews', num: interviews, color: 'var(--stat-interviews)' },
-        { label: 'Offers', num: offers, color: 'var(--stat-offers)' },
-        { label: 'Response rate', num: rate + '%', color: 'var(--stat-rate)' },
-      ];
+      return {
+        stages: [
+          { label: 'Applied', count: total, color: 'var(--stat-total)' },
+          { label: 'Screening', count: screening, color: 'var(--stat-active)' },
+          { label: 'Interview', count: interview, color: 'var(--stat-interviews)' },
+          { label: 'Offer', count: offer, color: 'var(--stat-offers)' },
+        ],
+        outcomes: [
+          { label: 'Rejected', count: rejected, color: 'var(--s-rejected)', bg: 'var(--s-rejected-bg)' },
+          { label: 'Ghosted', count: ghosted, color: 'var(--s-ghosted)', bg: 'var(--s-ghosted-bg)' },
+          { label: 'Withdrawn', count: withdrawn, color: 'var(--s-withdrawn)', bg: 'var(--s-withdrawn-bg)' },
+          { label: 'Response rate', count: rate + '%', color: 'var(--stat-rate)', bg: 'var(--accent-soft)' },
+        ],
+      };
     }
     function renderStats() {
-      document.getElementById('stats').innerHTML = computeStats(apps).map(s => `
-        <div class="stat" style="--stat-color:${s.color}"><div class="num">${s.num}</div><div class="label">${s.label}</div></div>
+      const { stages, outcomes } = computeFunnel(apps);
+      const base = stages[0].count || 1;
+      const rows = stages.map(s => `
+        <div class="funnel-row">
+          <div class="funnel-stage-label">${s.label}</div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round((s.count / base) * 100)}%; --stage-color:${s.color}"></div></div>
+          <div class="funnel-count">${s.count}</div>
+        </div>
       `).join('');
+      const chips = outcomes.map(o => `
+        <div class="outcome-chip" style="--chip-color:${o.color}; --chip-bg:${o.bg}">${o.label} <span class="n">${o.count}</span></div>
+      `).join('');
+      document.getElementById('funnelCard').innerHTML = `
+        <div class="funnel-title">Pipeline</div>
+        ${rows}
+        <div class="funnel-outcomes">${chips}</div>
+      `;
     }
 
     async function loadWatcherMeta() {
