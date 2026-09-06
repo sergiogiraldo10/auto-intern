@@ -319,7 +319,10 @@
   const GATE_KEY = 'auto_intern_unlocked_v1';
 
   function showApp() {
-    document.getElementById('gate').hidden = true;
+    // .style.display, not .hidden -- #gate's own CSS sets display:flex directly,
+    // which (being a plain ID rule) beats the UA stylesheet's [hidden] rule, so
+    // toggling the hidden property alone left the overlay visibly stuck on top.
+    document.getElementById('gate').style.display = 'none';
     document.getElementById('app').hidden = false;
     initApp();
   }
