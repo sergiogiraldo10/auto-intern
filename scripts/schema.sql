@@ -45,10 +45,12 @@ alter table meta enable row level security;
 -- `meta` is read-only for anon (so the page can show "last checked" status) --
 -- only the routines (service_role, which bypasses RLS) ever write to it.
 
+-- No delete policy on applications, intentionally: rows can be added and their
+-- status changed, but never removed, so the tracker is a permanent record.
+
 create policy "anon select applications" on applications for select to anon using (true);
 create policy "anon insert applications" on applications for insert to anon with check (true);
 create policy "anon update applications" on applications for update to anon using (true) with check (true);
-create policy "anon delete applications" on applications for delete to anon using (true);
 
 create policy "anon select leads" on leads for select to anon using (true);
 create policy "anon update leads" on leads for update to anon using (true) with check (true);

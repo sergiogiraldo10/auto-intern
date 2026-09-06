@@ -10,21 +10,21 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f7f7fc;
+    --bg: #f7f9fc;
     --surface: #ffffff;
-    --surface-sunken: #f1f1f9;
-    --border: #e2e2f1;
-    --ink: #201f33;
-    --ink-muted: #64637f;
-    --ink-faint: #9695ad;
-    --accent: #6c5ce7;
+    --surface-sunken: #f0f3f9;
+    --border: #e1e6f0;
+    --ink: #1c2333;
+    --ink-muted: #5c6478;
+    --ink-faint: #949bb0;
+    --accent: #3d8bfd;
     --accent-ink: #ffffff;
-    --accent-soft: #ece9fd;
-    --focus: #6c5ce7;
+    --accent-soft: #e6f0ff;
+    --focus: #3d8bfd;
 
-    --stat-total: #6c5ce7;   --stat-active: #0984e3;
+    --stat-total: #3d8bfd;   --stat-active: #14b8a6;
     --stat-interviews: #e84393; --stat-offers: #00b894;
-    --stat-rate: #e17055;
+    --stat-rate: #f59e0b;
 
     --s-applied: #2f80ed;    --s-applied-bg: #e8f1ff;
     --s-assessment: #ef9a3d; --s-assessment-bg: #fff2e2;
@@ -39,13 +39,13 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14131f; --surface: #1e1d2e; --surface-sunken: #191828; --border: #302f45;
-      --ink: #f2f1fb; --ink-muted: #b3b2c9; --ink-faint: #78778f;
-      --accent: #a08cff; --accent-ink: #14131f; --accent-soft: #2b2650;
+      --bg: #12151f; --surface: #1b1f2e; --surface-sunken: #171a27; --border: #2b3040;
+      --ink: #f1f3fb; --ink-muted: #a8afc4; --ink-faint: #767c92;
+      --accent: #7db2ff; --accent-ink: #0c1420; --accent-soft: #1f2a45;
 
-      --stat-total: #a08cff;   --stat-active: #56b6ff;
+      --stat-total: #7db2ff;   --stat-active: #4fd1c5;
       --stat-interviews: #ff8fc1; --stat-offers: #34d399;
-      --stat-rate: #ffab73;
+      --stat-rate: #ffb956;
 
       --s-applied: #6fa8ff;    --s-applied-bg: #1c2a4a;
       --s-assessment: #ffb066; --s-assessment-bg: #3a2712;
@@ -94,7 +94,7 @@
   header.page { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
   header.page h1 {
     font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; text-wrap: balance;
-    background: linear-gradient(90deg, var(--accent), var(--stat-interviews));
+    background: linear-gradient(90deg, var(--accent), var(--stat-rate));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   header.page .sub { color: var(--ink-muted); font-size: 13px; margin-top: 4px; }
@@ -165,8 +165,6 @@
     border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
   }
   button.ghost:hover { background: var(--surface-sunken); }
-  button.icon { background: transparent; border: none; color: var(--ink-faint); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
-  button.icon:hover { color: var(--s-rejected); background: var(--s-rejected-bg); }
 
   .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px; }
   .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 14px; }
@@ -314,7 +312,6 @@
             <th>Source</th>
             <th>Link</th>
             <th>Notes</th>
-            <th></th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -555,7 +552,6 @@
             <td>${escapeHtml(a.source || '—')}</td>
             <td>${a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">view</a>` : '—'}</td>
             <td class="notes">${escapeHtml(a.notes || '')}</td>
-            <td><button class="icon" data-del="${a.id}" title="Delete">✕</button></td>
           </tr>
         `;
       }).join('');
@@ -567,14 +563,6 @@
           e.target.style.color = meta.fg;
           e.target.style.backgroundColor = meta.bg;
           await sb.from('applications').update({ status: e.target.value, last_updated: new Date().toISOString() }).eq('id', id);
-          await loadApplications();
-        });
-      });
-      tbody.querySelectorAll('button[data-del]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const id = e.target.getAttribute('data-del');
-          if (!confirm('Delete this application?')) return;
-          await sb.from('applications').delete().eq('id', id);
           await loadApplications();
         });
       });
