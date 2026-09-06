@@ -205,13 +205,13 @@
 <body>
 
 <div id="gate">
-  <form class="card" id="gateForm">
+  <div class="card" id="gateForm">
     <h1>Application Tracker</h1>
     <p>Enter the password to continue.</p>
-    <input type="password" id="gatePassword" autocomplete="current-password" autofocus>
-    <button type="submit">Unlock</button>
+    <input type="password" id="gatePassword" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus>
+    <button type="button" id="gateSubmit">Unlock</button>
     <div class="err" id="gateErr"></div>
-  </form>
+  </div>
 </div>
 
 <div class="wrap" id="app" hidden>
@@ -325,11 +325,13 @@
   }
 
   try {
-    if (localStorage.getItem(GATE_KEY) === '1') {
+    let unlocked = false;
+    try { unlocked = localStorage.getItem(GATE_KEY) === '1'; } catch (err) { /* private mode etc */ }
+
+    if (unlocked) {
       showApp();
     } else {
-      document.getElementById('gateForm').addEventListener('submit', (e) => {
-        e.preventDefault();
+      const tryUnlock = () => {
         const pw = document.getElementById('gatePassword').value;
         if (pw === atob(GATE_PASSWORD_B64)) {
           try { localStorage.setItem(GATE_KEY, '1'); } catch (err) { /* private mode etc -- fine, just won't persist */ }
@@ -337,6 +339,10 @@
         } else {
           document.getElementById('gateErr').textContent = 'Wrong password.';
         }
+      };
+      document.getElementById('gateSubmit').addEventListener('click', tryUnlock);
+      document.getElementById('gatePassword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') tryUnlock();
       });
     }
   } catch (err) {
