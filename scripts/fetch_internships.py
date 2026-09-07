@@ -25,13 +25,26 @@ LISTINGS_URL = (
 
 # Edit these to widen/narrow what counts as a candidate.
 TARGET_TERMS = ["Summer 2027"]
-TARGET_CATEGORIES = [
-    "AI/ML/Data",
-    "Data Science, AI & Machine Learning",
-    "Software",
-    "Software Engineering",
+# Title-based filter, not category-based: the feed's own category buckets are
+# too coarse to separate DA/BA/DS roles from unrelated ones -- "Software"
+# (993 postings checked once) is ~99% generic SWE/robotics/hardware-adjacent
+# roles, while a handful of genuine analytics roles turn up scattered across
+# categories the old filter excluded entirely (Quant, Product). Matching the
+# title directly is what you're actually doing when you skim postings
+# yourself, so it mirrors that instead of trusting the feed's taxonomy.
+TITLE_INCLUDE_KEYWORDS = [
+    "data analy",          # data analyst, data analytics
+    "business analy",      # business analyst, business analytics
+    "data scien",          # data scientist, data science
+    "business intelligen", # business intelligence
+    "analytics",           # broad catch: "data & analytics", "analytics intern", ...
 ]
 EXCLUDED_DEGREES = {"Master's", "MBA", "PhD"}  # postings requiring ONLY these are skipped
+
+
+def title_matches(title: str) -> bool:
+    t = (title or "").lower()
+    return any(kw in t for kw in TITLE_INCLUDE_KEYWORDS)
 
 
 def fetch_listings(url: str) -> list:
@@ -56,7 +69,7 @@ def filter_listings(listings: list, since_days: float, seen_ids: set) -> list:
             continue
         if not any(t in TARGET_TERMS for t in item.get("terms", [])):
             continue
-        if item.get("category") not in TARGET_CATEGORIES:
+        if not title_matches(item.get("title", "")):
             continue
         if not degree_ok(item.get("degrees", [])):
             continue
