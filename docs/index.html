@@ -28,7 +28,7 @@
 
     --s-applied: #2f80ed;    --s-applied-bg: #e8f1ff;
     --s-assessment: #ef9a3d; --s-assessment-bg: #fff2e2;
-    --s-hirevue: #00b8d9;    --s-hirevue-bg: #e0f9fc;
+    --s-video: #00b8d9;      --s-video-bg: #e0f9fc;
     --s-interview: #9b51e0;  --s-interview-bg: #f4e8fd;
     --s-offer: #12b76a;      --s-offer-bg: #e3faed;
     --s-rejected: #f2545b;   --s-rejected-bg: #fde9ea;
@@ -49,7 +49,7 @@
 
       --s-applied: #6fa8ff;    --s-applied-bg: #1c2a4a;
       --s-assessment: #ffb066; --s-assessment-bg: #3a2712;
-      --s-hirevue: #4dd8ea;    --s-hirevue-bg: #103238;
+      --s-video: #4dd8ea;      --s-video-bg: #103238;
       --s-interview: #cd93f2;  --s-interview-bg: #33204a;
       --s-offer: #4ade80;      --s-offer-bg: #123722;
       --s-rejected: #ff8a90;   --s-rejected-bg: #3a1518;
@@ -247,6 +247,11 @@
     </div>
     <div class="leads-grid" id="leadsGrid"></div>
     <div class="leads-empty" id="leadsEmpty" hidden>No unreviewed matches right now — the daily scan will bring in new postings.</div>
+    <div class="watcher-banner" id="leadsWatcherBanner" hidden>
+      <span class="dot"></span>
+      <span id="leadsWatcherText"></span>
+      <span class="meta" id="leadsWatcherMeta"></span>
+    </div>
   </div>
 
   <div class="watcher-banner" id="watcherBanner" hidden>
@@ -263,7 +268,7 @@
       <option value="">All statuses</option>
       <option>Applied</option>
       <option>Assessment</option>
-      <option>HireVue</option>
+      <option>Video Interview</option>
       <option>Interview</option>
       <option>Offer</option>
       <option>Rejected</option>
@@ -271,6 +276,8 @@
       <option>Withdrawn</option>
     </select>
     <div class="spacer"></div>
+    <span class="leads-sub" id="refreshedAt"></span>
+    <button class="ghost" id="refreshBtn">⟳ Refresh</button>
     <button class="primary" id="addToggle">+ Add application</button>
   </div>
 
@@ -282,7 +289,7 @@
       <label>Date applied<input type="date" id="f-date"></label>
       <label>Status
         <select id="f-status">
-          <option>Applied</option><option>Assessment</option><option>HireVue</option>
+          <option>Applied</option><option>Assessment</option><option>Video Interview</option>
           <option>Interview</option><option>Offer</option><option>Rejected</option>
           <option>Ghosted</option><option>Withdrawn</option>
         </select>
@@ -378,7 +385,7 @@
     const STATUS_META = {
       Applied:    { fg: 'var(--s-applied)',    bg: 'var(--s-applied-bg)' },
       Assessment: { fg: 'var(--s-assessment)', bg: 'var(--s-assessment-bg)' },
-      HireVue:    { fg: 'var(--s-hirevue)',    bg: 'var(--s-hirevue-bg)' },
+      'Video Interview': { fg: 'var(--s-video)', bg: 'var(--s-video-bg)' },
       Interview:  { fg: 'var(--s-interview)',  bg: 'var(--s-interview-bg)' },
       Offer:      { fg: 'var(--s-offer)',      bg: 'var(--s-offer-bg)' },
       Rejected:   { fg: 'var(--s-rejected)',   bg: 'var(--s-rejected-bg)' },
@@ -427,7 +434,7 @@
       const total = list.length;
       const buckets = [
         { label: 'Online Assessment', match: a => a.status === 'Assessment', color: 'var(--s-assessment)' },
-        { label: 'Screening Interview (HireVue)', match: a => a.status === 'HireVue', color: 'var(--s-hirevue)' },
+        { label: 'Screening Interview (Video)', match: a => a.status === 'Video Interview', color: 'var(--s-video)' },
         { label: 'First Round Interview', match: a => a.status === 'Interview', color: 'var(--s-interview)' },
         { label: 'Offer', match: a => a.status === 'Offer', color: 'var(--s-offer)' },
         { label: 'Waiting for response', match: a => a.status === 'Applied', color: 'var(--s-applied)' },
@@ -439,7 +446,7 @@
         .map(b => ({ label: b.label, color: b.color, count: list.filter(b.match).length }))
         .filter(s => s.count > 0)
         .sort((a, b) => b.count - a.count);
-      const responded = list.filter(a => ['Assessment', 'HireVue', 'Interview', 'Offer', 'Rejected'].includes(a.status)).length;
+      const responded = list.filter(a => ['Assessment', 'Video Interview', 'Interview', 'Offer', 'Rejected'].includes(a.status)).length;
       const rate = total ? Math.round((responded / total) * 100) : 0;
       return { total, segments, rate };
     }
@@ -494,7 +501,7 @@
     }
 
     async function loadWatcherMeta() {
-      const { data } = await sb.from('meta').select('value').eq('key', 'watcher').maybeSingle();
+      const { data } = await sb.from('meta').select('value').eq('key', 'status_watcher').maybeSingle();
       renderWatcher(data ? data.value : null);
     }
     function renderWatcher(meta) {
@@ -506,6 +513,39 @@
         ? `<b>Inbox check:</b> ${n} status update${n === 1 ? '' : 's'} found — ${escapeHtml(meta.summary || '')}`
         : `<b>Inbox check:</b> no new updates since last check`;
       document.getElementById('watcherMeta').textContent = 'checked ' + new Date(meta.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    async function loadLeadsWatcherMeta() {
+      const { data } = await sb.from('meta').select('value').eq('key', 'leads_watcher').maybeSingle();
+      const banner = document.getElementById('leadsWatcherBanner');
+      if (!data || !data.value || !data.value.lastRunAt) { banner.hidden = true; return; }
+      const v = data.value;
+      banner.hidden = false;
+      document.getElementById('leadsWatcherText').innerHTML =
+        `<b>Scan:</b> ${v.newLeadsAdded || 0} new match${v.newLeadsAdded === 1 ? '' : 'es'} added` +
+        (v.archivedCount ? `, ${v.archivedCount} stale one${v.archivedCount === 1 ? '' : 's'} archived` : '');
+      document.getElementById('leadsWatcherMeta').textContent =
+        'checked ' + new Date(v.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    let lastRefreshedAt = null;
+    function updateRefreshLabel() {
+      const el = document.getElementById('refreshedAt');
+      if (!lastRefreshedAt) { el.textContent = ''; return; }
+      el.textContent = 'Refreshed ' + lastRefreshedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    }
+    async function refreshAll() {
+      const btn = document.getElementById('refreshBtn');
+      btn.disabled = true;
+      btn.textContent = 'Refreshing…';
+      try {
+        await Promise.all([loadApplications(), loadLeads(), loadWatcherMeta(), loadLeadsWatcherMeta()]);
+      } finally {
+        lastRefreshedAt = new Date();
+        updateRefreshLabel();
+        btn.disabled = false;
+        btn.textContent = '⟳ Refresh';
+      }
     }
 
     function renderLeads() {
@@ -635,6 +675,7 @@
     });
     document.getElementById('search').addEventListener('input', renderRows);
     document.getElementById('filterStatus').addEventListener('change', renderRows);
+    document.getElementById('refreshBtn').addEventListener('click', refreshAll);
 
     const addPanel = document.getElementById('addPanel');
     document.getElementById('addToggle').addEventListener('click', () => {
@@ -660,9 +701,10 @@
       await loadApplications();
     });
 
-    loadApplications();
-    loadLeads();
-    loadWatcherMeta();
+    Promise.all([loadApplications(), loadLeads(), loadWatcherMeta(), loadLeadsWatcherMeta()]).then(() => {
+      lastRefreshedAt = new Date();
+      updateRefreshLabel();
+    });
   }
 </script>
 </body>

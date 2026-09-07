@@ -235,6 +235,8 @@
       <option>Withdrawn</option>
     </select>
     <div class="spacer"></div>
+    <span class="leads-sub" id="refreshedAt"></span>
+    <button class="ghost" id="refreshBtn">⟳ Refresh</button>
     <button class="primary" id="addToggle">+ Add application</button>
   </div>
 
@@ -420,6 +422,42 @@
     document.getElementById('watcherMeta').textContent = 'checked ' + new Date(meta.lastRunAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  let lastRefreshedAt = null;
+
+  function updateRefreshLabel() {
+    const el = document.getElementById('refreshedAt');
+    if (!lastRefreshedAt) { el.textContent = ''; return; }
+    el.textContent = 'Refreshed ' + lastRefreshedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // Applications already update live via onSnapshot below, but that listener
+  // can occasionally miss a beat (backgrounded tab, a dropped connection);
+  // leads have no live subscription at all (a one-time Supabase fetch on
+  // load), so this is the only way to see a new GitHub Actions scan without
+  // reloading the whole page. One button re-pulls both.
+  async function refreshApplications() {
+    if (!db) return;
+    const snap = await db.collection('applications').get();
+    apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const metaSnap = await db.doc('meta/watcher').get();
+    renderWatcher(metaSnap.exists ? metaSnap.data() : null);
+  }
+
+  async function refreshAll() {
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true;
+    btn.textContent = 'Refreshing…';
+    try {
+      await Promise.all([loadLeads(), loadLeadsWatcherMeta(), refreshApplications()]);
+      renderAll();
+    } finally {
+      lastRefreshedAt = new Date();
+      updateRefreshLabel();
+      btn.disabled = false;
+      btn.textContent = '⟳ Refresh';
+    }
+  }
+
   async function loadLeads() {
     const { data, error } = await sb.from('leads').select('*').eq('status', 'new');
     leads = error ? [] : data;
@@ -570,6 +608,7 @@
   });
   document.getElementById('search').addEventListener('input', renderRows);
   document.getElementById('filterStatus').addEventListener('change', renderRows);
+  document.getElementById('refreshBtn').addEventListener('click', refreshAll);
 
   const addPanel = document.getElementById('addPanel');
   document.getElementById('addToggle').addEventListener('click', () => {
@@ -597,8 +636,10 @@
     }
   });
 
-  loadLeads(); // Supabase -- independent of the Artifact db capability below
-  loadLeadsWatcherMeta();
+  Promise.all([loadLeads(), loadLeadsWatcherMeta()]).then(() => { // Supabase -- independent of the Artifact db capability below
+    lastRefreshedAt = new Date();
+    updateRefreshLabel();
+  });
 
   (async () => {
     db = await window.claude?.use ? await window.claude.use('db') : null;
