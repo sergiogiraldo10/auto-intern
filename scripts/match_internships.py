@@ -79,7 +79,23 @@ def fetch_description_text(url: str) -> str:
     for tag in soup(["script", "style", "noscript", "svg"]):
         tag.decompose()
     text = soup.get_text(separator=" ")
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) >= MIN_DESCRIPTION_CHARS:
+        return text
+
+    # Many JS-rendered ATS platforms (confirmed on Workday) load the real
+    # description client-side, leaving an empty page shell here -- but still
+    # embed a real, full-length description in an og:description meta tag
+    # for social-link previews. Real content the visible-text pass above
+    # just can't see; falling back to it recovers postings that would
+    # otherwise be skipped entirely despite being genuinely fetchable.
+    for attrs in ({"property": "og:description"}, {"name": "description"}):
+        tag = soup.find("meta", attrs=attrs)
+        if tag and tag.get("content"):
+            meta_text = re.sub(r"\s+", " ", tag["content"]).strip()
+            if len(meta_text) > len(text):
+                text = meta_text
+    return text
 
 
 def score_against_keywords(description: str, keywords: list) -> dict:
