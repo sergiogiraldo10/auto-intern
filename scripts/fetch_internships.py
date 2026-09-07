@@ -39,12 +39,24 @@ TITLE_INCLUDE_KEYWORDS = [
     "business intelligen", # business intelligence
     "analytics",           # broad catch: "data & analytics", "analytics intern", ...
 ]
+# A second, looser pass for generic titles the strict list above misses (e.g.
+# "Reporting Analyst", "Consumer Insights Intern") -- scoped to ONLY the
+# feed's "AI/ML/Data" category, because tested against live data these bare
+# words are a much noisier signal outside it (a global "analyst" match would
+# also catch financial/legal/HR analyst roles filed under other categories).
+# Even within this category, some odd titles will slip through (a "Wildfire
+# Analyst Intern" showed up in testing) -- harmless, since the description-
+# scoring step downstream still filters those out by actual resume overlap.
+TIER2_CATEGORY = "AI/ML/Data"
+TIER2_INCLUDE_KEYWORDS = ["analyst", "insights", "reporting"]
 EXCLUDED_DEGREES = {"Master's", "MBA", "PhD"}  # postings requiring ONLY these are skipped
 
 
-def title_matches(title: str) -> bool:
-    t = (title or "").lower()
-    return any(kw in t for kw in TITLE_INCLUDE_KEYWORDS)
+def title_matches(item: dict) -> bool:
+    t = (item.get("title") or "").lower()
+    if any(kw in t for kw in TITLE_INCLUDE_KEYWORDS):
+        return True
+    return item.get("category") == TIER2_CATEGORY and any(kw in t for kw in TIER2_INCLUDE_KEYWORDS)
 
 
 def fetch_listings(url: str) -> list:
@@ -59,6 +71,34 @@ def degree_ok(degrees: list) -> bool:
     return any(d not in EXCLUDED_DEGREES for d in degrees)
 
 
+def merge_duplicate_locations(candidates: list) -> list:
+    """Large companies often post the identical role as separate listing
+    entries per city (confirmed on the live feed: 293 (company, title) groups
+    with multiple entries at once, e.g. Schonfeld's "Quantitative Research
+    Intern" as one entry for Miami and another for NYC) -- merge these into
+    one candidate with all locations combined, rather than surfacing
+    near-identical duplicates. Grouped by (company, title) and keyed on the
+    alphabetically-first id, so repeated runs pick the same canonical
+    id/url for a given group instead of flapping between entries."""
+    groups: dict = {}
+    for c in candidates:
+        groups.setdefault((c["company"], c["title"]), []).append(c)
+
+    merged = []
+    for group in groups.values():
+        group.sort(key=lambda c: c["id"])
+        primary = group[0]
+        if len(group) > 1:
+            locations = []
+            for c in group:
+                for loc in c.get("locations", []):
+                    if loc not in locations:
+                        locations.append(loc)
+            primary = {**primary, "locations": locations}
+        merged.append(primary)
+    return merged
+
+
 def filter_listings(listings: list, since_days: float, seen_ids: set) -> list:
     cutoff = time.time() - since_days * 86400
     out = []
@@ -69,7 +109,7 @@ def filter_listings(listings: list, since_days: float, seen_ids: set) -> list:
             continue
         if not any(t in TARGET_TERMS for t in item.get("terms", [])):
             continue
-        if not title_matches(item.get("title", "")):
+        if not title_matches(item):
             continue
         if not degree_ok(item.get("degrees", [])):
             continue
@@ -88,6 +128,7 @@ def filter_listings(listings: list, since_days: float, seen_ids: set) -> list:
                 "date_posted": item.get("date_posted"),
             }
         )
+    out = merge_duplicate_locations(out)
     out.sort(key=lambda x: x["date_posted"] or 0, reverse=True)
     return out
 
