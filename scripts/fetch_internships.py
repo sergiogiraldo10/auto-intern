@@ -25,13 +25,20 @@ LISTINGS_URL = (
 
 # Edit these to widen/narrow what counts as a candidate.
 TARGET_TERMS = ["Summer 2027"]
-# Title-based filter, not category-based: the feed's own category buckets are
-# too coarse to separate DA/BA/DS roles from unrelated ones -- "Software"
-# (993 postings checked once) is ~99% generic SWE/robotics/hardware-adjacent
-# roles, while a handful of genuine analytics roles turn up scattered across
-# categories the old filter excluded entirely (Quant, Product). Matching the
-# title directly is what you're actually doing when you skim postings
-# yourself, so it mirrors that instead of trusting the feed's taxonomy.
+# The feed's "AI/ML/Data" categories turn out to be a genuinely decent bucket
+# on their own -- included wholesale, trusting the description-scoring step
+# downstream to be the real filter for anything vague or borderline in there
+# (confirmed against real data: this is what catches a role like Ernst &
+# Young's "Data and Intelligence Delivery Intern - Assurance", which scored
+# 100% on pure analytics keywords -- Power BI, Tableau, Data Analytics,
+# Business Analytics, Data Visualization -- but whose title alone matches
+# none of the patterns below; a department name is not a reliable signal).
+# Outside these categories ("Software", "Quant", "Product", etc.), a title
+# still has to explicitly look like a DA/BA/DS role -- those categories are
+# dominated by generic SWE/robotics/hardware postings that happen to mention
+# a few of the same generic tools (Python, SQL, Java) without being an
+# analytics role at all, which the title filter exists specifically to catch.
+PRIMARY_CATEGORIES = {"AI/ML/Data", "Data Science, AI & Machine Learning"}
 TITLE_INCLUDE_KEYWORDS = [
     "data analy",          # data analyst, data analytics
     "business analy",      # business analyst, business analytics
@@ -39,24 +46,14 @@ TITLE_INCLUDE_KEYWORDS = [
     "business intelligen", # business intelligence
     "analytics",           # broad catch: "data & analytics", "analytics intern", ...
 ]
-# A second, looser pass for generic titles the strict list above misses (e.g.
-# "Reporting Analyst", "Consumer Insights Intern") -- scoped to ONLY the
-# feed's "AI/ML/Data" category, because tested against live data these bare
-# words are a much noisier signal outside it (a global "analyst" match would
-# also catch financial/legal/HR analyst roles filed under other categories).
-# Even within this category, some odd titles will slip through (a "Wildfire
-# Analyst Intern" showed up in testing) -- harmless, since the description-
-# scoring step downstream still filters those out by actual resume overlap.
-TIER2_CATEGORY = "AI/ML/Data"
-TIER2_INCLUDE_KEYWORDS = ["analyst", "insights", "reporting"]
 EXCLUDED_DEGREES = {"Master's", "MBA", "PhD"}  # postings requiring ONLY these are skipped
 
 
 def title_matches(item: dict) -> bool:
-    t = (item.get("title") or "").lower()
-    if any(kw in t for kw in TITLE_INCLUDE_KEYWORDS):
+    if item.get("category") in PRIMARY_CATEGORIES:
         return True
-    return item.get("category") == TIER2_CATEGORY and any(kw in t for kw in TIER2_INCLUDE_KEYWORDS)
+    t = (item.get("title") or "").lower()
+    return any(kw in t for kw in TITLE_INCLUDE_KEYWORDS)
 
 
 def fetch_listings(url: str) -> list:
