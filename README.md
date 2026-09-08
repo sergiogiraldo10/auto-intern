@@ -68,18 +68,31 @@ existing one. Rejection is checked first and short-circuits everything else.
    overlap**, not an LLM's semantic judgment -- real ATS platforms (Workday,
    Greenhouse, iCIMS, etc.) are keyword/exact-phrase parsers, not semantic
    AI, so a score meant to predict "would this posting's system flag my
-   resume" should mirror that mechanism. Zero API/model cost. If a posting's
-   page can't be fetched or returns too little content to be real (common on
-   JS-rendered platforms like Workday), that candidate is **skipped
-   entirely** rather than scored from title/category guesswork.
+   resume" should mirror that mechanism. Zero API/model cost. If the visible
+   page text comes up short, it falls back to the page's `og:description`
+   meta tag (confirmed real, full-length descriptions there on several
+   Workday-hosted postings that otherwise render their content client-side
+   and would return an empty shell) before giving up; a posting is only
+   **skipped entirely** if neither source clears `MIN_DESCRIPTION_CHARS`,
+   rather than scored from title/category guesswork.
 3. `scripts/supabase_client.py` -- writes results to `leads`, archives
    `leads` still `new` after 10 days, updates `meta.leads_watcher`.
+4. `scripts/notify_new_matches.py` -- if that run actually added any leads,
+   emails a ranked summary (company, role, score, matched keywords, link) to
+   `sergiogiraldo222@gmail.com` right away. Sends nothing on a run that finds
+   no new matches -- unlike the weekly digest, "nothing new" twice a day
+   isn't worth an email.
 
 ### 4. Weekly digest (GitHub Actions, `scripts/weekly_digest.py`)
 `.github/workflows/weekly-digest.yml`, Monday mornings. Reads `applications`
 from Supabase and emails a plain-text summary to
-`sergiogiraldo222@gmail.com` via the same Gmail OAuth credential (send
-scope) -- sends even on a quiet week, as a liveness check.
+`sergiogiraldo222@gmail.com` -- sends even on a quiet week, as a liveness
+check (unlike the new-matches notification above, which is deliberately
+silent when there's nothing to report).
+
+`scripts/gmail_client.py` holds the shared Gmail API helpers (`gmail_service`,
+`send_email`) used by this, `gmail_status_watcher.py`, and
+`notify_new_matches.py`.
 
 ### 5. Resume (`data/resume.md`)
 Plain-text mirror of Sergio's resume -- the fit-scoring reference for

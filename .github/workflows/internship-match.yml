@@ -11,6 +11,9 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+      GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+      GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +58,10 @@ jobs:
       - name: Write scored leads to the tracker
         if: steps.score.outputs.lead_count != '0'
         run: python scripts/supabase_client.py upsert leads --file scored_leads.json --on-conflict id
+
+      - name: Email a summary of new matches
+        if: steps.score.outputs.lead_count != '0'
+        run: python scripts/notify_new_matches.py --leads-file scored_leads.json
 
       - name: Write run summary to the tracker's meta table
         run: |

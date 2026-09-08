@@ -13,30 +13,14 @@ GMAIL_REFRESH_TOKEN from the environment.
 Usage:
     python scripts/weekly_digest.py
 """
-import base64
 import datetime
 import json
-import os
-from email.mime.text import MIMEText
-
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 
 import supabase_client as sb
+from gmail_client import gmail_service, send_email
 
 DIGEST_TO = "sergiogiraldo222@gmail.com"
 TERMINAL_STATUSES = {"Rejected", "Ghosted", "Withdrawn"}
-
-
-def gmail_service():
-    creds = Credentials(
-        token=None,
-        refresh_token=os.environ["GMAIL_REFRESH_TOKEN"],
-        client_id=os.environ["GMAIL_CLIENT_ID"],
-        client_secret=os.environ["GMAIL_CLIENT_SECRET"],
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
 def build_digest_text(apps: list) -> str:
@@ -80,21 +64,13 @@ def build_digest_text(apps: list) -> str:
     return "\n".join(lines)
 
 
-def send_email(service, subject: str, body: str):
-    msg = MIMEText(body)
-    msg["to"] = DIGEST_TO
-    msg["subject"] = subject
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
-    service.users().messages().send(userId="me", body={"raw": raw}).execute()
-
-
 def main():
     base, headers = sb._base_headers()
     apps = json.loads(sb._request("GET", f"{base}/rest/v1/applications?select=*", headers))
 
     digest_text = build_digest_text(apps)
     service = gmail_service()
-    send_email(service, "Weekly application digest", digest_text)
+    send_email(service, DIGEST_TO, "Weekly application digest", digest_text)
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     meta_base, meta_headers = sb._base_headers(prefer="return=representation,resolution=merge-duplicates")

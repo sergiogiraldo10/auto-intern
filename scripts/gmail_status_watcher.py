@@ -24,11 +24,10 @@ import os
 import sys
 
 from bs4 import BeautifulSoup
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 import supabase_client as sb
+from gmail_client import gmail_service
 
 # Statuses with nothing left to detect from email -- Rejected/Ghosted/
 # Withdrawn are dead ends, Offer is the top of the forward chain (anything
@@ -105,17 +104,6 @@ def classify_message(text: str):
             if kw in text:
                 return name, kw
     return None, None
-
-
-def gmail_service():
-    creds = Credentials(
-        token=None,
-        refresh_token=os.environ["GMAIL_REFRESH_TOKEN"],
-        client_id=os.environ["GMAIL_CLIENT_ID"],
-        client_secret=os.environ["GMAIL_CLIENT_SECRET"],
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
 def _decode(data: str) -> str:
