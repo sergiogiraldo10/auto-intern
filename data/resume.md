@@ -10,20 +10,19 @@ Bachelor of Science in Data Science, Minor in Business | GPA: 3.8/4.0
 - Leadership: NJIT Resident Assistant, Alpha Kappa Psi (Service Coordinator), Business Masterminds (Treasurer)
 
 ## Skills
-- **Languages & Tools:** SQL, Python, Power BI, Microsoft Excel, Tableau, C++, Java
+- **Languages & Tools:** SQL, Python, Power BI, Microsoft Excel, Tableau, Git, C++, Java
 - **Libraries:** Pandas, NumPy, Scikit-learn, Streamlit, Matplotlib, PyTorch, Seaborn
 - **Databases:** Oracle, SQLite, PostgreSQL, MySQL, SQL Server, MongoDB
 
 ## Experience
 
 **Data Analytics Co-Op** — PECO - Exelon, Philadelphia, PA — July 2026 – Present
-- Extracted and transformed over 1.2 million outage remarks from 6 years of reliability data using SQL, creating a training dataset for outage cause and defective equipment classification
-- Developed a Python-based classification model that extracts outage causes and defective equipment from unstructured outage remarks, achieving 92% accuracy while covering 90% of outage records and reducing manual labeling efforts by several hours per day
-- Created Power BI dashboards used by reliability teams to monitor outage trends and support data-driven maintenance decisions
+- Built an NLP classification pipeline (Python, SQL/Oracle) to predict outage cause/equipment from 1.2M+ remarks across 75K+ outage events, addressing class imbalance and label noise via weighted loss and label smoothing
+- Designed a precision-first inference pipeline with per-class confidence thresholds, keyword validation, and automated Excel scoring, achieving 93% accuracy on 70% of daily events and saving 3 hrs/week of manual review in production
 
 **Data Analyst, Office of the Dean of Management** — New Jersey Institute of Technology, Newark, NJ — January 2026 – July 2026
 - Classified sentiment across 45,000 World Cup tweets collected via the X API using Python NLP techniques, categorizing fan reactions as positive, negative, or neutral to quantify public opinion shifts during the tournament
-- Built a normalized SQL database with indexes on team, match day, and sentiment label, enabling filtered querying across the full 45,000-tweet dataset
+- Built a normalized SQL database with indexes on team, match day, and sentiment label, enabling filtered querying across the full dataset
 - Created a Power BI dashboard with match-by-match sentiment trendlines and team-level filters, allowing fans to explore engagement patterns across games and teams
 
 **Data Analyst Research Assistant** — New Jersey Institute of Technology, Newark, NJ — October 2025 – July 2026
