@@ -16,9 +16,9 @@ Bachelor of Science in Data Science, Minor in Business | GPA: 3.8/4.0
 
 ## Experience
 
-**Data Analytics Co-Op** — PECO - Exelon, Philadelphia, PA — July 2026 – Present
+**Data Analytics Co-op** — PECO - Exelon, Philadelphia, PA — July 2026 – Present
 - Built an NLP classification pipeline (Python, SQL/Oracle) to predict outage cause/equipment from 1.2M+ remarks across 75K+ outage events, addressing class imbalance and label noise via weighted loss and label smoothing
-- Designed a precision-first inference pipeline with per-class confidence thresholds, keyword validation, and automated Excel scoring, achieving 93% accuracy on 70% of daily events and saving 3 hrs/week of manual review in production
+- Designed a precision-first inference pipeline with per-class confidence thresholds and automated Excel scoring, achieving 93% accuracy on 70% of daily events and saving 3 hours per week of manual review in production
 
 **Data Analyst, Office of the Dean of Management** — New Jersey Institute of Technology, Newark, NJ — January 2026 – July 2026
 - Classified sentiment across 45,000 World Cup tweets collected via the X API using Python NLP techniques, categorizing fan reactions as positive, negative, or neutral to quantify public opinion shifts during the tournament
