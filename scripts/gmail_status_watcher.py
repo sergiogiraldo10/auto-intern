@@ -21,6 +21,7 @@ import base64
 import datetime
 import json
 import os
+import re
 import sys
 
 from bs4 import BeautifulSoup
@@ -73,10 +74,15 @@ VIDEO_INTERVIEW_KEYWORDS = [
     "asynchronous interview",
 ]
 ASSESSMENT_KEYWORDS = [
-    "online assessment", "coding assessment", "coding challenge",
-    "hackerrank", "codesignal", "coderpad", "complete your assessment",
-    "assessment invitation", "complete the following assessment",
+    "online assessment", "skills assessment", "entry-level assessment",
+    "coding assessment", "coding challenge",
+    "hackerrank", "codesignal", "coderpad", "assessment invitation",
 ]
+# Catches "complete your EY skills assessment" / "complete the assessment" /
+# "complete the following assessment" -- a literal-phrase list alone missed
+# real EY and PwC assessment emails, both of which insert their own words
+# between "complete your/the" and "assessment" instead of using it bare.
+ASSESSMENT_PATTERN = re.compile(r"complete (?:your|the)(?:\s+\w+){0,4}\s+assessment")
 
 # Precedence for classifying ONE email when more than one category's keywords
 # appear in it -- e.g. a Spark Hire email's boilerplate also says "interview
@@ -103,6 +109,10 @@ def classify_message(text: str):
         for kw in keywords:
             if kw in text:
                 return name, kw
+        if name == "Assessment":
+            m = ASSESSMENT_PATTERN.search(text)
+            if m:
+                return name, m.group(0)
     return None, None
 
 
