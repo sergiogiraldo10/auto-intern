@@ -54,8 +54,14 @@ REJECTED_KEYWORDS = [
     "unable to offer you a position at this time",
     "will not be extending an offer to you",
 ]
+# "offer of employment" deliberately excluded -- confirmed on a real Capital
+# One email to be too generic: it appeared in a recruiter's screening
+# question about non-competes ("...restrict you from accepting an offer of
+# employment from Capital One?"), a hypothetical, not an actual offer being
+# extended. The phrases below are all still-forward-looking, active-voice
+# statements that (so far) only show up in a genuine offer.
 OFFER_KEYWORDS = [
-    "pleased to offer", "extend an offer", "offer of employment",
+    "pleased to offer", "extend an offer",
     "official offer", "excited to offer you",
 ]
 INTERVIEW_KEYWORDS = [
