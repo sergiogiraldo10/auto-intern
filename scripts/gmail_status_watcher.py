@@ -53,6 +53,9 @@ REJECTED_KEYWORDS = [
     "we regret to inform you",
     "unable to offer you a position at this time",
     "will not be extending an offer to you",
+    "better fit our needs",  # confirmed real, missed rejection: Xcel Energy,
+                              # "the credentials of other candidates better
+                              # fit our needs at this time"
 ]
 # "offer of employment" deliberately excluded -- confirmed on a real Capital
 # One email to be too generic: it appeared in a recruiter's screening
