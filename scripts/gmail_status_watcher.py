@@ -158,9 +158,31 @@ def get_message_text(service, msg_id: str) -> str:
     return headers.get("Subject", "") + "\n" + extract_body(msg["payload"])
 
 
-def classify_status(service, company: str, date_applied: str):
+ROLE_STOPWORDS = {
+    "intern", "internship", "co-op", "coop", "summer", "winter", "spring",
+    "fall", "program", "role", "position", "opportunity", "the", "and", "or",
+    "of", "for", "in", "a", "an", "to", "at", "new",
+}
+
+
+def distinctive_words(role: str) -> set:
+    """The role title's meaningful words (company/product-agnostic filler
+    stripped), used to confirm an email is actually about THIS application
+    when the same company has more than one open."""
+    words = re.findall(r"[a-z]+", role.lower())
+    return {w for w in words if w not in ROLE_STOPWORDS and len(w) > 2}
+
+
+def classify_status(service, company: str, date_applied: str, role_words: set = None):
     """Returns (new_status, matched_keyword) or (None, None) if no
-    forward/terminal signal was found in any matching email."""
+    forward/terminal signal was found in any matching email. When
+    role_words is given (the company has more than one open application),
+    a message is only considered if it mentions every one of those words --
+    otherwise a status email about ONE role can silently get applied to
+    every application at that company. Confirmed real: a single Xcel Energy
+    rejection naming one specific posting got applied to 3 unrelated Xcel
+    Energy applications too, before this check existed, because the search
+    only ever scoped by company name."""
     query = f'"{company}" after:{date_applied.replace("-", "/")}'
     try:
         resp = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
@@ -175,6 +197,9 @@ def classify_status(service, company: str, date_applied: str):
         except HttpError as e:
             print(f"  Gmail fetch failed for {company} message {m['id']}: {e}", file=sys.stderr)
             continue
+
+        if role_words and not all(w in text for w in role_words):
+            continue  # doesn't clearly name this specific role -- skip it
 
         name, kw = classify_message(text)
         if name == "Rejected":
@@ -201,13 +226,17 @@ def main():
     updates = []
     service = gmail_service()
 
-    for app in apps:
-        if app["status"] in TERMINAL_STATUSES:
-            continue
+    open_apps = [a for a in apps if a["status"] not in TERMINAL_STATUSES]
+    company_counts = {}
+    for a in open_apps:
+        company_counts[a["company"]] = company_counts.get(a["company"], 0) + 1
+
+    for app in open_apps:
         checked += 1
         current_order = STAGE_ORDER.get(app["status"], 0)
-        print(f"Checking {app['company']} ({app['status']})...", file=sys.stderr)
-        new_status, keyword = classify_status(service, app["company"], app["date_applied"])
+        role_words = distinctive_words(app["role"]) if company_counts[app["company"]] > 1 else None
+        print(f"Checking {app['company']} - {app['role']} ({app['status']})...", file=sys.stderr)
+        new_status, keyword = classify_status(service, app["company"], app["date_applied"], role_words=role_words)
 
         if new_status is None:
             continue
